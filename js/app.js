@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
   showAllDevices: false, autoReconnect: true,
   uploadGarmin: false, uploadStrava: false,
   hrZoneMode: 'max', hrCustom: null, hrGarmin: null,
+  hrAutoAdjust: true, // pasos por zona de pulso: la app ajusta la velocidad (false = solo avisa)
   paceZoneMode: 'threshold', thresholdPace: 300, paceCustom: null, // zonas de ritmo: desde el ritmo umbral (s/km) o personalizadas // zonas de pulso: 'max' (% FC máx.), 'custom' o 'garmin'
   workoutUnit: 'speed', // 'speed' (km/h) o 'pace' (min/km) para escribir los entrenamientos
 };
@@ -413,6 +414,16 @@ function hrControl(s) {
   const trend = old === null ? 0 : (mean(0, 5000) ?? avg) - old; // ppm de cambio en ~15 s
   const { floors, max } = hrZoneConfig();
   const lo = floors[st.zone - 1], hi = st.zone < 5 ? floors[st.zone] - 1 : max;
+  if (App.settings.hrAutoAdjust === false) {
+    // Ajuste automático desactivado: la velocidad no se toca; solo se avisa si el pulso sale de la zona.
+    s.hrState = avg < lo ? 'below' : avg > hi ? 'above' : 'ok';
+    if (s.hrState !== 'ok' && now - (s.hrCueAt || 0) > 45000) {
+      s.hrCueAt = now;
+      Sound.beep(s.hrState === 'above' ? 440 : 880, 0.25);
+      Sound.say(s.hrState === 'above' ? 'Pulso alto, baja el ritmo' : 'Pulso bajo, sube el ritmo');
+    }
+    return;
+  }
   let delta = 0;
   if (avg < lo) delta = trend >= HR_CTRL.trendBpm ? 0 : lo - avg > 10 ? HR_CTRL.up * 2 : HR_CTRL.up;
   else if (avg > hi) delta = trend <= -HR_CTRL.trendBpm ? 0 : -(avg - hi > 8 ? HR_CTRL.bigDown : HR_CTRL.down);

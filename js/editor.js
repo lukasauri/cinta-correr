@@ -120,7 +120,9 @@ function renderEditor() {
   box.append(h('p', { class: 'muted small' }, usePace
     ? 'Duración: escribe mm:ss (p. ej. 1:30) o minutos (p. ej. 5). Distancia en metros. Ritmo en min/km (p. ej. 5:30). Deja el ritmo vacío o pon 0 para que la cinta se pause durante ese paso (solo en pasos por tiempo).'
     : 'Duración: escribe mm:ss (p. ej. 1:30) o minutos (p. ej. 5). Distancia en metros. Velocidad 0 = la cinta se pausa durante ese paso (solo en pasos por tiempo).'),
-    h('p', { class: 'muted small' }, 'Paso por zona de pulso: la cinta empieza al ritmo indicado y la app lo ajusta poco a poco para mantener el pulso en la zona, sin pasar nunca del máximo. Necesita el pulsómetro conectado; si se pierde el pulso, mantiene la velocidad.'));
+    h('p', { class: 'muted small' }, App.settings.hrAutoAdjust === false
+      ? 'Paso por zona de pulso (ajuste automático desactivado en Ajustes): la cinta va al ritmo de inicio, tú lo cambias con − / + y la app te avisa si te sales de la zona. El "máximo" solo se usa con el ajuste automático.'
+      : 'Paso por zona de pulso: la cinta empieza al ritmo indicado y la app lo ajusta poco a poco para mantener el pulso en la zona, sin pasar nunca del máximo. Necesita el pulsómetro conectado; si se pierde el pulso, mantiene la velocidad. Se puede desactivar en Ajustes > Cinta.'));
   requestAnimationFrame(() => updateEditorSummary(w));
 }
 

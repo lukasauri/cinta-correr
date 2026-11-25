@@ -244,7 +244,8 @@ function updateTargetBox() {
   const kmh = first ? first.speed : App.targetSpeed;
   const what = pace ? 'Ritmo' : 'Velocidad';
   const cur = s && s.steps && s.steps[s.stepIdx];
-  setText($('#targetLabel'), s ? (cur && cur.target === 'hr' ? `Ajuste por pulso (Z${cur.zone})` : `${what} objetivo`) : first ? 'El entrenamiento empieza a' : `${what} inicial`);
+  const hrLabel = cur && cur.target === 'hr' ? (App.settings.hrAutoAdjust === false ? `Zona ${cur.zone} de pulso · a mano` : `Ajuste por pulso (Z${cur.zone})`) : null;
+  setText($('#targetLabel'), s ? (hrLabel || `${what} objetivo`) : first ? 'El entrenamiento empieza a' : `${what} inicial`);
   setText($('#targetSpeed'), kmh > 0 ? fmtMain(kmh) : (pace ? '--:--' : '0.0'));
   setText($('#targetUnit'), pace ? '/km' : 'km/h');
   setText($('#targetAlt'), kmh > 0 ? (pace ? `${fmtAlt(kmh)} km/h` : `${fmtAlt(kmh)} /km`) : (first ? 'pausa' : ''));
@@ -261,7 +262,7 @@ function updateCustom(type, item, c, force, now) {
       setText(el.querySelector('.st-title'), `${c.step.name || 'Paso'}  ·  ${c.stepIdx + 1}/${c.nSteps}`);
       let txt = fmtStepTarget(c.step);
       if (c.step.target === 'hr') {
-        const state = { up: '↑ subiendo', down: '↓ bajando', ok: '✓ en zona', wait: '… esperando al pulso', cap: '⚠ al máximo', floor: '⚠ al mínimo', nohr: '⚠ sin pulso' }[c.session.hrState] || 'ajustando…';
+        const state = { up: '↑ subiendo', down: '↓ bajando', ok: '✓ en zona', wait: '… esperando al pulso', cap: '⚠ al máximo', floor: '⚠ al mínimo', nohr: '⚠ sin pulso', above: '⚠ pulso alto: baja el ritmo', below: '⚠ pulso bajo: sube el ritmo' }[c.session.hrState] || (App.settings.hrAutoAdjust === false ? 'ajuste a mano' : 'ajustando…');
         txt += ` · ahora ${fmtMain(c.target)} ${isPace() ? '/km' : 'km/h'} · ${state}`;
       }
       setText(el.querySelector('.st-target'), txt);
