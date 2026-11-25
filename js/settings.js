@@ -5,7 +5,7 @@ function renderSettings() {
   const S = App.settings;
   const box = $('#settingsBox');
   box.innerHTML = '';
-  const save = () => { Store.set('settings', S); renderPresets(); };
+  const save = () => { Store.set('settings', S); renderPresets(); resetIdleTarget(); };
   const field = (label, input, hint) => h('label', { class: 'field' }, h('span', { class: 'f-label' }, label), input, hint ? h('small', { class: 'muted' }, hint) : null);
   const num = (key, label, attrs, hint) => field(label, h('input', {
     type: 'number', value: S[key], ...attrs,
@@ -30,9 +30,13 @@ function renderSettings() {
         'Se usa en toda la app: objetivo y botones mientras corres, datos de la pantalla y entrenamientos.'),
       ...(isPace() ? [
         field('Ritmo inicial en carrera libre (min/km)', h('input', {
-          type: 'text', value: fmtPace(S.freeStartSpeed),
-          onchange: e => { const k = paceToKmh(e.target.value); if (k > 0) { S.freeStartSpeed = k; save(); } e.target.value = fmtPace(S.freeStartSpeed); }
-        })),
+          type: 'text', value: fmtTime(S.freeStartPace || 360).replace(/^0/, ''),
+          onchange: e => {
+            const sec = parseTime(e.target.value);
+            if (sec >= 120 && sec <= 3600) { S.freeStartPace = sec; save(); }
+            e.target.value = fmtTime(S.freeStartPace || 360).replace(/^0/, '');
+          }
+        }), 'Con el que arranca la cinta en carrera libre. Antes de pulsar Iniciar también se puede cambiar con − / +.'),
         num('paceStep', 'Salto de los botones + / − y flechas (segundos por km)', { min: 1, max: 60, step: 1 }, 'Con 5: 5:30 → 5:25 (más rápido) o 5:35 (más despacio).'),
         field('Botones de ritmo rápido (min/km)', h('input', {
           type: 'text', value: (S.pacePresets || []).map(fmtTime).map(t => t.replace(/^0/, '')).join(' '),

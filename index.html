@@ -38,11 +38,20 @@
           <button id="btnPrevStep" class="btn" title="Paso anterior" hidden>⏮</button>
           <button id="btnNextStep" class="btn" title="Saltar al siguiente paso" hidden>⏭</button>
         </div>
-        <div class="ctl-group">
-          <button class="btn big" id="btnSlower" title="Más despacio (flecha abajo)">−</button>
-          <div class="target"><small id="targetLabel">objetivo km/h</small><b id="targetSpeed">0.0</b><small id="targetAlt"></small></div>
-          <button class="btn big" id="btnFaster" title="Más rápido (flecha arriba)">+</button>
-          <div id="presets" class="presets"></div>
+        <div class="ctl-group speed-box" id="speedCtl">
+          <div class="speed-main">
+            <button class="btn step-btn" id="btnSlower" title="Flecha abajo del teclado"><span class="sym">−</span><span class="txt" id="slowerTxt">más despacio</span></button>
+            <div class="target">
+              <small id="targetLabel">Velocidad objetivo</small>
+              <div class="tval"><b id="targetSpeed">0.0</b><span id="targetUnit">km/h</span></div>
+              <small id="targetAlt"></small>
+            </div>
+            <button class="btn step-btn" id="btnFaster" title="Flecha arriba del teclado"><span class="sym">+</span><span class="txt">más rápido</span></button>
+          </div>
+          <div class="presets-box">
+            <small id="presetsLabel">Elegir velocidad (km/h):</small>
+            <div id="presets" class="presets"></div>
+          </div>
         </div>
         <div class="ctl-group">
           <button class="btn" id="btnEditLayout" title="Personalizar la pantalla">✎ Personalizar</button>

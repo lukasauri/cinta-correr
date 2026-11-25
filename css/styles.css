@@ -59,9 +59,12 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .controls { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; margin-bottom: 12px; }
 .ctl-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 #selWorkout { min-width: 200px; padding: 10px; font-weight: 600; }
-.target { display: flex; flex-direction: column; align-items: center; min-width: 74px; }
-.target small { color: var(--muted); font-size: 11px; }
-.target b { font-size: 26px; font-variant-numeric: tabular-nums; }
+.target { display: flex; flex-direction: column; align-items: center; min-width: 120px; }
+.target small { color: var(--muted); font-size: 12px; }
+#targetLabel { text-transform: uppercase; letter-spacing: .05em; font-weight: 700; font-size: 11px; }
+.target .tval { display: flex; align-items: baseline; gap: 5px; }
+.target b { font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+#targetUnit { color: var(--muted); font-size: 14px; font-weight: 600; }
 .presets { display: flex; gap: 6px; flex-wrap: wrap; }
 .preset { min-width: 44px; }
 .editbar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 10px 12px; margin-bottom: 12px; border: 1px dashed var(--accent); border-radius: var(--radius); background: var(--panel); }
@@ -206,3 +209,13 @@ code { background: var(--panel); padding: 1px 6px; border-radius: 4px; }
 .unit-btn { border: 0; background: var(--panel2); padding: 7px 14px; cursor: pointer; font-weight: 600; color: var(--muted); }
 .unit-btn + .unit-btn { border-left: 1px solid var(--border); }
 .unit-btn.active { background: var(--accent); color: #fff; }
+
+/* Control de velocidad / ritmo objetivo */
+.speed-box { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 14px; gap: 10px 18px; }
+.speed-main { display: flex; align-items: center; gap: 10px; }
+.step-btn { display: flex; flex-direction: column; align-items: center; line-height: 1.15; padding: 6px 10px; min-width: 92px; }
+.step-btn .sym { font-size: 22px; font-weight: 700; }
+.step-btn .txt { font-size: 11px; color: var(--muted); font-weight: 600; }
+.presets-box { display: flex; flex-direction: column; gap: 5px; padding-left: 18px; border-left: 1px solid var(--border); }
+.presets-box small { color: var(--muted); font-size: 12px; font-weight: 600; }
+#speedCtl.locked .step-btn, #speedCtl.locked .preset { opacity: .35; pointer-events: none; }

@@ -169,13 +169,27 @@ function updateGrid(force) {
     const col = def.color ? def.color(c) : null;
     el.style.setProperty('--wcolor', col || 'var(--text)');
   });
-  // Objetivo en la barra de control: grande en la unidad elegida, la otra debajo.
-  const tEl = $('#targetSpeed');
-  if (tEl) setText(tEl, fmtMain(App.targetSpeed));
-  const tLbl = $('#targetLabel');
-  if (tLbl) setText(tLbl, `objetivo ${mainUnit()}`);
-  const tAlt = $('#targetAlt');
-  if (tAlt) setText(tAlt, App.targetSpeed > 0 ? `${fmtAlt(App.targetSpeed)} ${altUnit()}` : '');
+  updateTargetBox();
+}
+
+/** Recuadro de velocidad / ritmo objetivo: título, valor con su unidad, la otra unidad y atajos. */
+function updateTargetBox() {
+  const box = $('#speedCtl');
+  if (!box) return;
+  const pace = isPace(), s = App.session;
+  // Con un entrenamiento elegido y sin empezar, se muestra cómo empieza (lo marca el entrenamiento).
+  const w = !s ? selectedWorkout() : null;
+  const first = w && w.steps[0];
+  const kmh = first ? first.speed : App.targetSpeed;
+  const what = pace ? 'Ritmo' : 'Velocidad';
+  setText($('#targetLabel'), s ? `${what} objetivo` : first ? 'El entrenamiento empieza a' : `${what} inicial`);
+  setText($('#targetSpeed'), kmh > 0 ? fmtMain(kmh) : (pace ? '--:--' : '0.0'));
+  setText($('#targetUnit'), pace ? '/km' : 'km/h');
+  setText($('#targetAlt'), kmh > 0 ? (pace ? `${fmtAlt(kmh)} km/h` : `${fmtAlt(kmh)} /km`) : (first ? 'pausa' : ''));
+  setText($('#slowerTxt'), pace ? 'más lento' : 'más despacio');
+  setText($('#presetsLabel'), pace ? 'Elegir ritmo (min/km):' : 'Elegir velocidad (km/h):');
+  box.classList.toggle('locked', !!first);
+  box.title = first ? 'El entrenamiento marca la velocidad. Se puede ajustar cuando esté en marcha.' : '';
 }
 
 function updateCustom(type, item, c, force, now) {

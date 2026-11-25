@@ -5,7 +5,7 @@ const DEFAULT_SETTINGS = {
   weight: 75, maxHr: 190, distSource: 'calc', kcalSource: 'calc',
   voice: true, beeps: true, countdown: 3,
   presets: [4, 6, 8, 10, 12], speedStep: 0.5, freeStartSpeed: 4,
-  pacePresets: [420, 390, 360, 330, 300], paceStep: 5, // en min/km: ritmos rápidos (segundos/km) y salto de +/− (s)
+  pacePresets: [420, 390, 360, 330, 300], paceStep: 5, freeStartPace: 360, // en min/km: ritmos rápidos (segundos/km) y salto de +/− (s)
   showAllDevices: false, autoReconnect: true,
   uploadGarmin: false, uploadStrava: false,
   workoutUnit: 'speed', // 'speed' (km/h) o 'pace' (min/km) para escribir los entrenamientos
@@ -238,7 +238,8 @@ async function startSession() {
   log(`Sesión iniciada: ${s.name}`);
   if (s.steps) { applyStep(true); }
   else {
-    App.targetSpeed = App.settings.freeStartSpeed;
+    // Empieza con lo que muestra el objetivo (el ritmo inicial, o lo que se haya ajustado antes de empezar).
+    if (!(App.targetSpeed > 0)) App.targetSpeed = startTarget();
     startBelt(App.targetSpeed);
   }
   renderGrid();
@@ -452,7 +453,7 @@ function finishSession() {
   const s = App.session, t = App.treadmill;
   if (!s) return Promise.resolve();
   App.session = null;
-  App.targetSpeed = 0;
+  App.targetSpeed = startTarget(); // la siguiente carrera vuelve a empezar en el ritmo inicial
   const stopped = t && t.connected ? cmd(() => t.stop()) : Promise.resolve();
   releaseWakeLock();
   updateControls();
@@ -474,6 +475,15 @@ function finishSession() {
 /* ---------- Velocidad ---------- */
 
 let speedTimer = null;
+/** Velocidad con la que empieza una carrera libre (ritmo inicial en min/km, 6:00 por defecto). */
+function startTarget() {
+  return isPace() ? 3600 / (App.settings.freeStartPace || 360) : App.settings.freeStartSpeed;
+}
+/** Sin sesión, el objetivo muestra (y permite ajustar) el valor con el que se empezará. */
+function resetIdleTarget() {
+  if (!App.session) { App.targetSpeed = startTarget(); updateGrid(); }
+}
+
 /** Fija la velocidad objetivo. En min/km se guardan 3 decimales para que el ritmo quede exacto también a ritmos lentos. */
 function setTarget(kmh, decimals = isPace() ? 3 : 1) {
   const t = App.treadmill;
@@ -489,7 +499,7 @@ function setTarget(kmh, decimals = isPace() ? 3 : 1) {
   speedTimer = setTimeout(() => {
     if (!t || !t.connected) return;
     if (s && s.paused) return;
-    if (!s && App.live.speed < 0.3) { toast('Pulsa Iniciar para arrancar la cinta'); return; }
+    if (!s) return; // antes de empezar solo se ajusta el valor de inicio
     if (App.live.speed < 0.3) startBelt(kmh);
     else cmd(() => t.setSpeed(kmh));
   }, 250);
@@ -497,7 +507,7 @@ function setTarget(kmh, decimals = isPace() ? 3 : 1) {
 
 /** +/− : dir = +1 más rápido, −1 más despacio. En min/km salta de paceStep en paceStep (p. ej. 5:30 → 5:25). */
 function changeTarget(dir) {
-  const cur = App.targetSpeed || App.live.speed || App.settings.freeStartSpeed;
+  const cur = App.targetSpeed || App.live.speed || startTarget();
   if (!isPace()) return setTarget(cur + dir * App.settings.speedStep);
   const step = Math.max(1, Math.round(App.settings.paceStep || 5));
   const sec = Math.round(3600 / Math.max(cur, 0.5));
@@ -520,6 +530,7 @@ function renderPresets() {
 function setUnits(unit) {
   App.settings.workoutUnit = unit === 'pace' ? 'pace' : 'speed';
   Store.set('settings', App.settings);
+  resetIdleTarget();
   renderPresets();
   renderGrid();
   if ($('#view-workouts').classList.contains('active')) renderEditor();
@@ -586,6 +597,7 @@ function recoverActiveSession() {
 }
 
 function init() {
+  App.targetSpeed = startTarget();
   applyLayoutStyles();
   refreshWorkoutSelect();
   renderPresets();
