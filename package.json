@@ -1,7 +1,7 @@
 {
   "name": "cintapc",
   "productName": "CintaPC",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Control de la cinta Behumax Slim 4000 (FTMS) con entrenamientos, pantalla personalizable y subida a Garmin Connect y Strava.",
   "private": true,
   "type": "module",
