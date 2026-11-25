@@ -144,6 +144,30 @@ export function interpretUpload(status, body) {
   }
 }
 
+const ZONE_KEYS = ['zone1Floor', 'zone2Floor', 'zone3Floor', 'zone4Floor', 'zone5Floor']
+
+/**
+ * Zonas de pulso de la respuesta de Garmin (una configuración por deporte). Se prefieren las de carrera;
+ * si no las hay, las generales (DEFAULT). null si la respuesta no trae zonas válidas.
+ */
+export function pickHrZones(body) {
+  const list = Array.isArray(body) ? body : Array.isArray(body?.zones) ? body.zones : body && typeof body === 'object' ? [body] : []
+  const valid = list.filter((z) => z && ZONE_KEYS.every((k) => Number.isFinite(z[k]) && z[k] > 0) &&
+    ZONE_KEYS.every((k, i) => i === 0 || z[k] > z[ZONE_KEYS[i - 1]]))
+  const sport = (z) => String(z.sport ?? 'DEFAULT').toUpperCase()
+  const zone = valid.find((z) => sport(z) === 'RUNNING') ?? valid.find((z) => sport(z) === 'DEFAULT') ?? valid[0]
+  if (!zone) return null
+  const num = (v) => (Number.isFinite(v) && v > 0 ? Math.round(v) : null)
+  return {
+    floors: ZONE_KEYS.map((k) => Math.round(zone[k])),
+    max: num(zone.maxHeartRateUsed),
+    resting: num(zone.restingHeartRateUsed),
+    lthr: num(zone.lactateThresholdHeartRateUsed),
+    method: typeof zone.trainingMethod === 'string' ? zone.trainingMethod : null,
+    sport: sport(zone)
+  }
+}
+
 function multipart(file, fileName) {
   const boundary = `----CintaPC${crypto.randomUUID().replace(/-/g, '')}`
   const head = Buffer.from(
@@ -247,6 +271,16 @@ export class GarminClient {
       body: JSON.stringify(body)
     })
     if (!response.ok) throw new Error(`Garmin no aceptó el nombre de la actividad (${response.status}).`)
+  }
+
+  /** Zonas de pulso configuradas en Garmin Connect (las de carrera si las hay). */
+  async heartRateZones() {
+    const response = await this.api('/biometric-service/heartRateZones')
+    if (!response.ok) throw new Error(`Garmin no devolvió las zonas de pulso (${response.status}).`)
+    const body = await response.json().catch(() => null)
+    const zones = pickHrZones(body)
+    if (!zones) throw new Error('Garmin no devolvió zonas de pulso válidas. ¿Tienes zonas configuradas en Garmin Connect?')
+    return zones
   }
 
   async disconnect() { await this.options.tokens.clear() }

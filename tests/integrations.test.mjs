@@ -131,3 +131,22 @@ test('Cola: sin sesión de Garmin, Strava se sube igualmente', async () => {
   const byTarget = Object.fromEntries(queue.list().map((j) => [j.target, j.status]))
   assert.deepEqual(byTarget, { garmin: 'needsAuth', strava: 'done' })
 })
+
+test('Garmin: zonas de pulso (prefiere las de carrera) y respuestas raras', async () => {
+  const { pickHrZones } = await import('../electron/integrations/garminClient.mjs')
+  const general = { sport: 'DEFAULT', trainingMethod: 'HR_MAX_BASED', zone1Floor: 95, zone2Floor: 114, zone3Floor: 133, zone4Floor: 152, zone5Floor: 171, maxHeartRateUsed: 190, restingHeartRateUsed: 50 }
+  const running = { ...general, sport: 'RUNNING', trainingMethod: 'LACTATE_THRESHOLD', zone1Floor: 120, zone2Floor: 140, zone3Floor: 155, zone4Floor: 165, zone5Floor: 175, lactateThresholdHeartRateUsed: 168 }
+  assert.deepEqual(pickHrZones([general, running]), { floors: [120, 140, 155, 165, 175], max: 190, resting: 50, lthr: 168, method: 'LACTATE_THRESHOLD', sport: 'RUNNING' })
+  assert.equal(pickHrZones([general]).sport, 'DEFAULT')
+  assert.equal(pickHrZones([{ ...general, zone3Floor: null }]), null)
+  assert.equal(pickHrZones([{ ...general, zone3Floor: 100 }]), null) // no ascendentes
+  assert.equal(pickHrZones(null), null)
+
+  const srv = await fakeServer(({ path }) => {
+    if (path === '/biometric-service/heartRateZones') return { json: [general, running] }
+    return { status: 404 }
+  })
+  const client = new GarminClient({ tokens: memoryTokens({ accessToken: 't', refreshToken: 'r', clientId: 'c', expiresAt: Date.now() + 86400000, refreshExpiresAt: null, refreshedAt: Date.now(), displayName: null }), endpoints: garminEndpointsAt(srv.base) })
+  assert.deepEqual((await client.heartRateZones()).floors, [120, 140, 155, 165, 175])
+  srv.close()
+})

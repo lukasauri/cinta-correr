@@ -219,3 +219,14 @@ code { background: var(--panel); padding: 1px 6px; border-radius: 4px; }
 .presets-box { display: flex; flex-direction: column; gap: 5px; padding-left: 18px; border-left: 1px solid var(--border); }
 .presets-box small { color: var(--muted); font-size: 12px; font-weight: 600; }
 #speedCtl.locked .step-btn, #speedCtl.locked .preset { opacity: .35; pointer-events: none; }
+
+/* Zonas de pulso */
+.zone small { font-size: 10px; opacity: .9; }
+.zone-inputs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.zone-inputs label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.zone-inputs label b { color: var(--zc, var(--muted)); }
+.zone-inputs input { width: 100%; padding: 6px 4px; text-align: center; }
+.zone-table { display: flex; flex-direction: column; gap: 4px; }
+.zone-row { display: grid; grid-template-columns: 34px 1fr auto; gap: 8px; align-items: center; padding: 5px 10px; border-radius: 8px; background: var(--panel2); border-left: 4px solid var(--zc); font-size: 13px; }
+.zone-row b { color: var(--zc); }
+.zone-row .rng { font-variant-numeric: tabular-nums; color: var(--muted); }

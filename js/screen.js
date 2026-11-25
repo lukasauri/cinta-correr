@@ -3,6 +3,27 @@
 
 const ZONE_COLORS = ['#94a3b8', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444'];
 const ZONE_NAMES = ['Recuperación', 'Base aeróbica', 'Aeróbico', 'Umbral', 'Máximo'];
+const ZONE_PCTS = [0.5, 0.6, 0.7, 0.8, 0.9];
+
+/** Zonas de pulso en uso: inicio (ppm) de Z1…Z5 y FC máxima, según Ajustes. */
+function hrZoneConfig() {
+  const S = App.settings;
+  if (S.hrZoneMode === 'garmin' && S.hrGarmin && Array.isArray(S.hrGarmin.floors)) return { floors: S.hrGarmin.floors, max: S.hrGarmin.max || S.maxHr, source: 'garmin' };
+  if (S.hrZoneMode === 'custom' && S.hrCustom && Array.isArray(S.hrCustom.floors)) return { floors: S.hrCustom.floors, max: S.hrCustom.max || S.maxHr, source: 'custom' };
+  return { floors: ZONE_PCTS.map(p => Math.round(S.maxHr * p)), max: S.maxHr, source: 'max' };
+}
+/** Zona (1–5) de un pulso. Por debajo del inicio de Z2 cuenta como Z1. */
+function hrZoneOf(hr) {
+  const { floors } = hrZoneConfig();
+  let z = 1;
+  for (let i = 1; i < 5; i++) if (hr >= floors[i]) z = i + 1;
+  return z;
+}
+/** Texto del rango de cada zona: "120–139", …, "175–190". */
+function hrZoneRanges() {
+  const { floors, max } = hrZoneConfig();
+  return floors.map((f, i) => i < 4 ? `${f}–${floors[i + 1] - 1}` : `${f}–${max}`);
+}
 
 const WIDGETS = {
   // Los widgets de velocidad siguen la unidad elegida en Ajustes: el "principal" la usa y el
@@ -53,9 +74,8 @@ function buildCtx() {
   c.avgHr = s && s.hrTime > 0 ? Math.round(s.hrSum / s.hrTime) : null;
   c.maxHrSess = s && s.hrMax ? s.hrMax : null;
   if (hr) {
-    const pct = hr / App.settings.maxHr;
-    c.hrPct = Math.round(pct * 100);
-    c.zone = pct < 0.6 ? 1 : pct < 0.7 ? 2 : pct < 0.8 ? 3 : pct < 0.9 ? 4 : 5;
+    c.hrPct = Math.round(hr / hrZoneConfig().max * 100);
+    c.zone = hrZoneOf(hr);
   }
   if (s && s.steps) {
     const st = s.steps[s.stepIdx];
@@ -150,7 +170,8 @@ function buildCustom(type, el) {
   } else if (type === 'chart') {
     el.append(h('canvas', { class: 'chart' }));
   } else if (type === 'zone') {
-    el.append(h('div', { class: 'zones' }, ZONE_COLORS.map((col, i) => h('div', { class: 'zone', style: { '--zc': col } }, h('b', {}, `Z${i + 1}`), h('span', {}, ZONE_NAMES[i])))));
+    const ranges = hrZoneRanges();
+    el.append(h('div', { class: 'zones' }, ZONE_COLORS.map((col, i) => h('div', { class: 'zone', style: { '--zc': col } }, h('b', {}, `Z${i + 1}`), h('span', {}, ZONE_NAMES[i]), h('small', {}, ranges[i])))));
   }
 }
 

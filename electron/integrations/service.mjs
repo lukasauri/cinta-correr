@@ -241,6 +241,16 @@ export function setupIntegrations(deps) {
     return status()
   })
 
+  ipcMain.handle('garmin:hr-zones', async () => {
+    await ready
+    try {
+      return await garmin.heartRateZones()
+    } catch (error) {
+      if (error instanceof GarminAuthError) throw new Error('Inicia sesión en Garmin Connect (Ajustes) para importar tus zonas.')
+      throw error
+    }
+  })
+
   ipcMain.handle('uploads:list', async () => { await ready; return queue.list() })
 
   ipcMain.handle('uploads:enqueue', async (_event, activityId, plan) => {

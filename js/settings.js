@@ -21,7 +21,7 @@ function renderSettings() {
   box.append(
     card('Perfil',
       num('weight', 'Peso (kg)', { min: 30, max: 200, step: 1 }, 'Se usa para estimar las calorías.'),
-      num('maxHr', 'Frecuencia cardiaca máxima (ppm)', { min: 120, max: 230, step: 1 }, 'Define las zonas de pulso (Z1 < 60 %, Z2 60–70 %, Z3 70–80 %, Z4 80–90 %, Z5 > 90 %).')),
+      hrZonesSection(S, save, field)),
     integrationsCard(),
     card('Cinta',
       field('Unidades', h('select', { value: S.workoutUnit, onchange: e => setUnits(e.target.value) },
@@ -76,6 +76,92 @@ function renderSettings() {
       logBox,
       h('div', { class: 'row gap' }, h('button', { class: 'btn', onclick: () => { navigator.clipboard.writeText(App.logLines.join('\n')).then(() => toast('Registro copiado')); } }, 'Copiar registro')))
   );
+}
+
+/* ---------- Zonas de pulso ---------- */
+function hrZonesSection(S, save, field) {
+  const wrap = h('div', { class: 'col gap hr-zones' });
+  const render = () => {
+    wrap.innerHTML = '';
+    const mode = S.hrZoneMode || 'max';
+    wrap.append(field('Zonas de pulso', h('select', {
+      value: mode, onchange: e => {
+        S.hrZoneMode = e.target.value;
+        // Al pasar a personalizadas se parte de las que se estaban usando.
+        if (S.hrZoneMode === 'custom' && !S.hrCustom) { const c = hrZoneConfig(); S.hrCustom = { floors: [...c.floors], max: c.max }; }
+        save(); render();
+        if (S.hrZoneMode === 'garmin' && !S.hrGarmin && Desktop) importGarminZones(S, save, render, true);
+      }
+    },
+      h('option', { value: 'max' }, 'Según % de la FC máxima'),
+      h('option', { value: 'custom' }, 'Personalizadas'),
+      h('option', { value: 'garmin' }, 'Las de mi Garmin Connect'))));
+
+    if (mode === 'max') {
+      wrap.append(field('Frecuencia cardiaca máxima (ppm)', h('input', {
+        type: 'number', min: 120, max: 230, step: 1, value: S.maxHr,
+        onchange: e => { const v = parseInt(e.target.value, 10); if (v >= 120 && v <= 230) { S.maxHr = v; save(); render(); } else e.target.value = S.maxHr; }
+      }), 'Z1 50–60 %, Z2 60–70 %, Z3 70–80 %, Z4 80–90 %, Z5 90–100 % de la FC máxima.'));
+    } else if (mode === 'custom') {
+      const c = S.hrCustom || { floors: hrZoneConfig().floors, max: hrZoneConfig().max };
+      const inputs = c.floors.map((f, i) => h('input', { type: 'number', min: 40, max: 230, step: 1, value: f, title: `Inicio de la zona ${i + 1}` }));
+      const maxIn = h('input', { type: 'number', min: 100, max: 240, step: 1, value: c.max, title: 'FC máxima' });
+      const apply = () => {
+        const floors = inputs.map(x => parseInt(x.value, 10)), max = parseInt(maxIn.value, 10);
+        const ok = floors.every(v => v >= 40 && v <= 230) && floors.every((v, i) => i === 0 || v > floors[i - 1]) && max > floors[4];
+        if (!ok) { toast('Cada zona tiene que empezar por encima de la anterior, y la FC máxima por encima de Z5', 'warn'); render(); return; }
+        S.hrCustom = { floors, max }; save(); render();
+      };
+      [...inputs, maxIn].forEach(x => x.addEventListener('change', apply));
+      wrap.append(h('div', { class: 'f-label' }, 'Pulso (ppm) en el que empieza cada zona'),
+        h('div', { class: 'zone-inputs' },
+          inputs.map((x, i) => h('label', { style: { '--zc': ZONE_COLORS[i] } }, h('b', {}, `Z${i + 1}`), x)),
+          h('label', {}, h('b', {}, 'Máx.'), maxIn)));
+    } else {
+      const g = S.hrGarmin;
+      if (!Desktop) wrap.append(h('small', { class: 'muted' }, 'Solo disponible en la app de escritorio.'));
+      else {
+        const btn = h('button', { class: 'btn' }, g ? 'Volver a importar' : 'Importar de Garmin Connect');
+        btn.onclick = () => importGarminZones(S, save, render, false, btn);
+        wrap.append(h('div', { class: 'row gap wrap' }, btn,
+          h('small', { class: 'muted' }, g ? `Importadas el ${fmtDate(g.importedAt)} · ${g.sport === 'RUNNING' ? 'zonas de carrera' : 'zonas generales'}${g.method ? ' · ' + zoneMethodName(g.method) : ''}` : 'Aún no se han importado.')));
+        wrap.append(h('small', { class: 'muted' }, 'Necesita la sesión de Garmin iniciada (más abajo). Se actualizan solas cada día al abrir la app, por si las cambias en Garmin.'));
+      }
+      if (!g) { wrap.append(h('small', { class: 'muted' }, 'Mientras tanto se usan las zonas según % de la FC máxima.')); }
+    }
+    wrap.append(zoneTable());
+  };
+  render();
+  return wrap;
+}
+
+function zoneMethodName(m) {
+  return { HR_MAX_BASED: '% FC máxima', HR_RESERVE: '% FC de reserva', LACTATE_THRESHOLD: '% umbral de lactato' }[m] || m;
+}
+
+function zoneTable() {
+  const ranges = hrZoneRanges();
+  return h('div', { class: 'zone-table' }, ZONE_COLORS.map((col, i) =>
+    h('div', { class: 'zone-row', style: { '--zc': col } }, h('b', {}, `Z${i + 1}`), h('span', {}, ZONE_NAMES[i]), h('span', { class: 'rng' }, `${ranges[i]} ppm`))));
+}
+
+/** Importa las zonas de Garmin Connect. silent: sin avisos si no hay sesión (p. ej. al arrancar). */
+async function importGarminZones(S, save, render, silent, btn) {
+  if (!Desktop) return;
+  if (btn) btn.disabled = true;
+  try {
+    const z = await Desktop.integrations.garminHrZones();
+    S.hrGarmin = { ...z, importedAt: Date.now() };
+    save();
+    if (!silent || btn) toast(`Zonas de Garmin importadas: ${z.floors.join(' · ')} ppm`);
+    log(`Zonas de pulso de Garmin (${z.sport}, ${z.method || '?'}): ${z.floors.join(', ')} · máx ${z.max || '?'}`);
+  } catch (e) {
+    log('No se pudieron importar las zonas de Garmin: ' + e.message);
+    if (!silent) toast(e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    if (render) render();
+  }
 }
 
 function exportBackup() {

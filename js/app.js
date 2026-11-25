@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS = {
   pacePresets: [420, 390, 360, 330, 300], paceStep: 5, freeStartPace: 360, // en min/km: ritmos rápidos (segundos/km) y salto de +/− (s)
   showAllDevices: false, autoReconnect: true,
   uploadGarmin: false, uploadStrava: false,
+  hrZoneMode: 'max', hrCustom: null, hrGarmin: null, // zonas de pulso: 'max' (% FC máx.), 'custom' o 'garmin'
   workoutUnit: 'speed', // 'speed' (km/h) o 'pace' (min/km) para escribir los entrenamientos
 };
 

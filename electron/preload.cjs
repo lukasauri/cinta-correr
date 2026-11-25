@@ -30,7 +30,8 @@ contextBridge.exposeInMainWorld('cintapc', {
     disconnectStrava: () => invoke('strava:disconnect'),
     garminLogin: () => invoke('garmin:login'),
     garminLogout: () => invoke('garmin:logout'),
-    garminCheck: () => invoke('garmin:check')
+    garminCheck: () => invoke('garmin:check'),
+    garminHrZones: () => invoke('garmin:hr-zones')
   },
   uploads: {
     list: () => invoke('uploads:list'),

@@ -282,4 +282,9 @@ function setupDesktop() {
     l.forEach(j => { if (j.status === 'done' && before.get(j.id) && before.get(j.id) !== 'done' && j.url) toast(`${TARGET_NAMES[j.target]}: ${j.message}`); });
   });
   Desktop.integrations.onChange(st => { integrationsStatus = st; fillIntegrationsCard(); });
+  // Zonas de Garmin: se vuelven a importar una vez al día (por si se cambian en Garmin Connect).
+  const g = App.settings.hrGarmin;
+  if (App.settings.hrZoneMode === 'garmin' && (!g || Date.now() - g.importedAt > 864e5)) {
+    importGarminZones(App.settings, () => Store.set('settings', App.settings), () => { if ($('#view-train').classList.contains('active')) renderGrid(); }, true);
+  }
 }
