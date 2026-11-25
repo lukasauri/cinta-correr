@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CintaPC</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏃</text></svg>">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🏃 CintaPC</div>
+    <nav class="tabs">
+      <button data-view="train" class="active">Entrenar</button>
+      <button data-view="workouts">Entrenamientos</button>
+      <button data-view="history">Historial</button>
+      <button data-view="settings">Ajustes</button>
+    </nav>
+    <div class="devices">
+      <button id="btnTreadmill" class="chip" title="Cinta de correr"><span class="dot"></span><span class="lbl">Conectar cinta</span></button>
+      <button id="btnHr" class="chip" title="Pulsómetro"><span class="dot"></span>❤ <span class="lbl">Conectar pulsómetro</span></button>
+    </div>
+  </header>
+
+  <div id="bleWarning" class="banner" hidden>
+    Este navegador no admite Bluetooth web. Abre la app con <b>Iniciar CintaPC.cmd</b>. Mientras tanto puedes usar el simulador.
+  </div>
+
+  <main>
+    <!-- ENTRENAR -->
+    <section id="view-train" class="view active">
+      <div class="controls">
+        <div class="ctl-group">
+          <select id="selWorkout" title="Entrenamiento"></select>
+          <button id="btnStart" class="btn primary big">▶ Iniciar</button>
+          <button id="btnPause" class="btn big" hidden>⏸ Pausa</button>
+          <button id="btnStop" class="btn danger big" hidden>■ Terminar</button>
+          <button id="btnPrevStep" class="btn" title="Paso anterior" hidden>⏮</button>
+          <button id="btnNextStep" class="btn" title="Saltar al siguiente paso" hidden>⏭</button>
+        </div>
+        <div class="ctl-group">
+          <button class="btn big" id="btnSlower" title="Más despacio (flecha abajo)">−</button>
+          <div class="target"><small>objetivo km/h</small><b id="targetSpeed">0.0</b></div>
+          <button class="btn big" id="btnFaster" title="Más rápido (flecha arriba)">+</button>
+          <div id="presets" class="presets"></div>
+        </div>
+        <div class="ctl-group">
+          <button class="btn" id="btnEditLayout" title="Personalizar la pantalla">✎ Personalizar</button>
+          <button class="btn" id="btnFullscreen" title="Pantalla completa (F)">⛶</button>
+        </div>
+      </div>
+
+      <div id="editBar" class="editbar" hidden>
+        <label>Añadir <select id="selAddWidget"></select></label>
+        <button id="btnAddWidget" class="btn">+ Añadir</button>
+        <label>Columnas <input id="lyCols" type="number" min="2" max="8"></label>
+        <label>Alto de fila <input id="lyRow" type="range" min="60" max="400" step="5"></label>
+        <label>Texto <input id="lyFont" type="range" min="0.5" max="2" step="0.05"></label>
+        <label>Tema <select id="lyTheme"><option value="dark">Oscuro</option><option value="light">Claro</option></select></label>
+        <label>Color <input id="lyAccent" type="color"></label>
+        <button id="btnResetLayout" class="btn">Restaurar</button>
+        <button id="btnDoneLayout" class="btn primary">Listo</button>
+        <span class="muted small">Arrastra los widgets para ordenarlos y elige su tamaño.</span>
+      </div>
+
+      <div id="grid" class="grid"></div>
+      <div class="kbd-hint muted small">Teclado: <b>Espacio</b> pausa · <b>Esc</b> pausa · <b>↑ ↓</b> velocidad · <b>F</b> pantalla completa</div>
+    </section>
+
+    <!-- ENTRENAMIENTOS -->
+    <section id="view-workouts" class="view">
+      <div class="split">
+        <aside id="woList" class="side"></aside>
+        <div id="woEditor" class="panel"></div>
+      </div>
+    </section>
+
+    <!-- HISTORIAL -->
+    <section id="view-history" class="view">
+      <div class="split">
+        <aside id="histList" class="side"></aside>
+        <div id="histDetail" class="panel"></div>
+      </div>
+    </section>
+
+    <!-- AJUSTES -->
+    <section id="view-settings" class="view">
+      <div id="settingsBox" class="settings"></div>
+    </section>
+  </main>
+
+  <div id="countdown" class="countdown" hidden><b>3</b><span>¡Prepárate!</span></div>
+
+  <dialog id="dlgConnect">
+    <h3>Conectar cinta</h3>
+    <p class="muted">Enciende la cinta y asegúrate de que <b>Kinomap no está conectado</b> en el móvil (la cinta solo acepta una conexión a la vez).</p>
+    <label class="field check"><input type="checkbox" id="chkShowAll"> <span>Mostrar todos los dispositivos Bluetooth (si la cinta no aparece)</span></label>
+    <div class="row gap wrap">
+      <button id="btnConnBle" class="btn primary">Buscar cinta Bluetooth</button>
+      <button id="btnConnSim" class="btn">Usar simulador</button>
+      <button class="btn" data-close>Cancelar</button>
+    </div>
+  </dialog>
+
+  <dialog id="dlgSeries">
+    <form>
+      <h3>Añadir series</h3>
+      <div class="form-grid">
+        <label>Repeticiones <input name="reps" type="number" min="1" max="50" value="6"></label>
+        <span></span>
+        <label>Duración serie <input name="workTime" value="1:00"></label>
+        <label>Velocidad serie (km/h) <input name="workSpeed" type="number" step="0.1" value="11"></label>
+        <label>Duración recuperación <input name="restTime" value="1:30"></label>
+        <label>Velocidad recuperación (km/h) <input name="restSpeed" type="number" step="0.1" value="6"></label>
+      </div>
+      <label class="field check"><input type="checkbox" name="lastRest"> <span>Añadir recuperación también tras la última serie</span></label>
+      <div class="row gap">
+        <button type="submit" class="btn primary">Añadir</button>
+        <button type="button" class="btn" data-close>Cancelar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgBle">
+    <h3>Elige el dispositivo</h3>
+    <p class="muted small">Aparecen los dispositivos Bluetooth cercanos. La cinta suele mostrarse con su nombre de modelo.</p>
+    <div id="bleList" class="ble-list"></div>
+    <div class="row gap"><button id="btnBleCancel" class="btn">Cancelar</button></div>
+  </dialog>
+
+  <dialog id="dlgSummary">
+    <div class="body"></div>
+    <div class="row gap"><button class="btn" data-close>Cerrar</button></div>
+  </dialog>
+
+  <script src="js/util.js"></script>
+  <script src="js/devices.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/screen.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/desktop.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
