@@ -8,7 +8,8 @@ const DEFAULT_SETTINGS = {
   pacePresets: [420, 390, 360, 330, 300], paceStep: 5, freeStartPace: 360, // en min/km: ritmos rápidos (segundos/km) y salto de +/− (s)
   showAllDevices: false, autoReconnect: true,
   uploadGarmin: false, uploadStrava: false,
-  hrZoneMode: 'max', hrCustom: null, hrGarmin: null, // zonas de pulso: 'max' (% FC máx.), 'custom' o 'garmin'
+  hrZoneMode: 'max', hrCustom: null, hrGarmin: null,
+  paceZoneMode: 'threshold', thresholdPace: 300, paceCustom: null, // zonas de ritmo: desde el ritmo umbral (s/km) o personalizadas // zonas de pulso: 'max' (% FC máx.), 'custom' o 'garmin'
   workoutUnit: 'speed', // 'speed' (km/h) o 'pace' (min/km) para escribir los entrenamientos
 };
 
@@ -266,6 +267,7 @@ function applyStep(first) {
 
 function describeStep(st) {
   const amount = st.type === 'time' ? speakDuration(st.value) : `${st.value} metros`;
+  if (st.target === 'hr') return `${st.name ? st.name + '. ' : ''}Zona ${st.zone} de pulso durante ${amount}`;
   return st.speed > 0 ? `${st.name ? st.name + '. ' : ''}${speakTarget(st.speed)} durante ${amount}` : `${st.name ? st.name + '. ' : ''}Pausa de ${amount}`;
 }
 
@@ -282,6 +284,7 @@ function gotoStep(idx) {
   }
   s.stepIdx = Math.max(0, idx);
   s.stepElapsed = 0; s.stepDist = 0; s.lastBeep = ''; s.announced = false;
+  s.hrAdjAt = 0; s.hrState = null; s.hrWarned = false;
   Sound.beep(1000, 0.25);
   applyStep(false);
   updateControls();
@@ -367,6 +370,65 @@ function autoPause(s, msg) {
   updateControls();
 }
 
+/* ---------- Pasos por zona de pulso: ajuste automático de la velocidad ---------- */
+const HR_CTRL = {
+  firstAfterS: 30,   // el pulso tarda en responder: primer ajuste a los 30 s de empezar el paso
+  everyS: 20,        // y después, como mucho uno cada 20 s
+  trendBpm: 3,       // si el pulso ya va camino de la zona (±3 ppm en ~15 s), se espera en vez de corregir más
+  up: 0.2,           // subir poco a poco (0,4 si está a más de 10 ppm por debajo)
+  down: 0.3,         // bajar algo más rápido (0,6 si está a más de 8 ppm por encima)
+  bigDown: 0.6,
+  minKmh: 3,         // nunca por debajo de paso de caminar
+};
+
+/**
+ * Mantiene el pulso en la zona del paso cambiando la velocidad. Seguridad:
+ *  - nunca más rápido que el máximo del paso (ni que el máximo de la cinta);
+ *  - sin pulso (o un valor imposible) no se toca nada;
+ *  - usa la media de los últimos 10 s para no reaccionar a lecturas sueltas;
+ *  - si el pulso ya se está moviendo hacia la zona, espera (el pulso va con retraso respecto a la velocidad).
+ */
+function hrControl(s) {
+  const st = s.steps && s.steps[s.stepIdx];
+  if (!st || st.target !== 'hr' || s.paused || s.beltPaused) return;
+  const t = App.treadmill;
+  if (!t || !t.connected) return;
+  const now = Date.now(), hr = currentHr();
+  const valid = hr && hr >= 40 && hr <= 230;
+  s.hrBuf = (s.hrBuf || []).filter(x => now - x[0] < 20000);
+  if (valid) s.hrBuf.push([now, hr]);
+  if (s.stepElapsed < HR_CTRL.firstAfterS) return;
+  if (!valid) {
+    // Sin pulso ahora mismo: no se ajusta con lecturas antiguas.
+    s.hrBuf = [];
+    s.hrState = 'nohr';
+    if (!s.hrWarned) { s.hrWarned = true; toast('Sin pulso: se mantiene la velocidad. Conecta el pulsómetro.', 'warn'); log('Paso por pulso sin datos de pulso: velocidad fija'); }
+    return;
+  }
+  s.hrWarned = false;
+  if (now - (s.hrAdjAt || 0) < HR_CTRL.everyS * 1000) return;
+  const mean = (from, to) => { const xs = s.hrBuf.filter(x => now - x[0] >= from && now - x[0] < to); return xs.length ? xs.reduce((a, x) => a + x[1], 0) / xs.length : null; };
+  const avg = mean(0, 10000);
+  const old = mean(12000, 20000);
+  const trend = old === null ? 0 : (mean(0, 5000) ?? avg) - old; // ppm de cambio en ~15 s
+  const { floors, max } = hrZoneConfig();
+  const lo = floors[st.zone - 1], hi = st.zone < 5 ? floors[st.zone] - 1 : max;
+  let delta = 0;
+  if (avg < lo) delta = trend >= HR_CTRL.trendBpm ? 0 : lo - avg > 10 ? HR_CTRL.up * 2 : HR_CTRL.up;
+  else if (avg > hi) delta = trend <= -HR_CTRL.trendBpm ? 0 : -(avg - hi > 8 ? HR_CTRL.bigDown : HR_CTRL.down);
+  if (!delta) { s.hrState = avg >= lo && avg <= hi ? 'ok' : 'wait'; return; }
+  const range = t.speedRange || { min: 1, max: 20 };
+  const cap = Math.min(st.maxSpeed > 0 ? st.maxSpeed : st.speed + 2, range.max);
+  const floor = Math.max(HR_CTRL.minKmh, range.min);
+  const cur = App.targetSpeed || st.speed;
+  const next = clamp(cur + delta, floor, Math.max(cap, floor));
+  if (Math.abs(next - cur) < 0.05) { s.hrState = delta > 0 ? 'cap' : 'floor'; return; }
+  s.hrState = delta > 0 ? 'up' : 'down';
+  s.hrAdjAt = now;
+  log(`Pulso ${Math.round(avg)} (zona ${st.zone}: ${lo}–${hi}) → ${next.toFixed(2)} km/h`);
+  setTarget(next);
+}
+
 /**
  * Vigila que la cinta haga lo que se le pide y detecta lo que se hace desde su consola.
  * Seguridad: solo reenvía el arranque si la cinta NUNCA se ha movido desde que la app la arrancó;
@@ -427,6 +489,7 @@ function tick() {
     if (!s.paused && dt > 0) accumulate(s, dt);
     if (App.session === s) {
       watchdog(s);
+      hrControl(s);
       if (Date.now() - s.lastSave > 30000) { s.lastSave = Date.now(); Store.set('active', s); }
     }
   }

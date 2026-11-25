@@ -21,7 +21,8 @@ function renderSettings() {
   box.append(
     card('Perfil',
       num('weight', 'Peso (kg)', { min: 30, max: 200, step: 1 }, 'Se usa para estimar las calorías.'),
-      hrZonesSection(S, save, field)),
+      hrZonesSection(S, save, field),
+      paceZonesSection(S, save, field)),
     integrationsCard(),
     card('Cinta',
       field('Unidades', h('select', { value: S.workoutUnit, onchange: e => setUnits(e.target.value) },
@@ -139,10 +140,52 @@ function zoneMethodName(m) {
   return { HR_MAX_BASED: '% FC máxima', HR_RESERVE: '% FC de reserva', LACTATE_THRESHOLD: '% umbral de lactato' }[m] || m;
 }
 
-function zoneTable() {
-  const ranges = hrZoneRanges();
+function zoneTable(ranges = hrZoneRanges().map(r => `${r} ppm`)) {
   return h('div', { class: 'zone-table' }, ZONE_COLORS.map((col, i) =>
-    h('div', { class: 'zone-row', style: { '--zc': col } }, h('b', {}, `Z${i + 1}`), h('span', {}, ZONE_NAMES[i]), h('span', { class: 'rng' }, `${ranges[i]} ppm`))));
+    h('div', { class: 'zone-row', style: { '--zc': col } }, h('b', {}, `Z${i + 1}`), h('span', {}, ZONE_NAMES[i]), h('span', { class: 'rng' }, ranges[i]))));
+}
+
+/* ---------- Zonas de ritmo (colores de los pasos por ritmo) ---------- */
+function paceZonesSection(S, save, field) {
+  const wrap = h('div', { class: 'col gap hr-zones' });
+  const fmt = sec => fmtTime(sec).replace(/^0/, '');
+  const render = () => {
+    wrap.innerHTML = '';
+    const mode = S.paceZoneMode || 'threshold';
+    wrap.append(field('Zonas de ritmo', h('select', {
+      value: mode, onchange: e => {
+        S.paceZoneMode = e.target.value;
+        if (S.paceZoneMode === 'custom' && !S.paceCustom) S.paceCustom = [...paceZoneConfig().starts];
+        save(); render();
+      }
+    }, h('option', { value: 'threshold' }, 'Calculadas desde mi ritmo umbral'), h('option', { value: 'custom' }, 'Personalizadas')),
+      'Dan color a los pasos por ritmo en el gráfico del entrenamiento.'));
+    if (mode === 'threshold') {
+      wrap.append(field('Ritmo umbral (min/km)', h('input', {
+        type: 'text', value: fmt(S.thresholdPace || 300),
+        onchange: e => {
+          const sec = parseTime(e.target.value);
+          if (sec >= 150 && sec <= 900) { S.thresholdPace = sec; save(); render(); }
+          else { toast('Escribe el ritmo como minutos:segundos por km, p. ej. 5:00', 'warn'); e.target.value = fmt(S.thresholdPace || 300); }
+        }
+      }), 'El ritmo que podrías aguantar corriendo fuerte durante unos 50–60 minutos (algo más lento que tu ritmo de 10 km).'));
+    } else {
+      const st = S.paceCustom || paceZoneConfig().starts;
+      const inputs = st.map((sec, i) => h('input', { type: 'text', value: fmt(sec), title: `Ritmo en el que empieza la zona ${i + 2}` }));
+      inputs.forEach(x => x.addEventListener('change', () => {
+        const v = inputs.map(x => parseTime(x.value));
+        const ok = v.every(s => s >= 120 && s <= 1200) && v.every((s, i) => i === 0 || s < v[i - 1]);
+        if (!ok) { toast('Cada zona tiene que empezar en un ritmo más rápido que la anterior (p. ej. 6:30, 5:40, 5:15, 4:55)', 'warn'); render(); return; }
+        S.paceCustom = v; save(); render();
+      }));
+      wrap.append(h('div', { class: 'f-label' }, 'Ritmo (min/km) en el que empieza cada zona'),
+        h('div', { class: 'zone-inputs four' }, inputs.map((x, i) => h('label', { style: { '--zc': ZONE_COLORS[i + 1] } }, h('b', {}, `Z${i + 2}`), x))),
+        h('small', { class: 'muted' }, 'Z1 es todo lo que sea más lento que el inicio de Z2.'));
+    }
+    wrap.append(zoneTable(paceZoneRanges()));
+  };
+  render();
+  return wrap;
 }
 
 /** Importa las zonas de Garmin Connect. silent: sin avisos si no hay sesión (p. ej. al arrancar). */

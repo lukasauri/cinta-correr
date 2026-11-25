@@ -81,8 +81,8 @@ function drawLineChart(cv, opts) {
 
   // perfil objetivo
   if (opts.profile && ranges[0]) {
-    ctx.fillStyle = cssVar('--accent') + '22';
     opts.profile.forEach(p => {
+      ctx.fillStyle = (p.color || cssVar('--accent')) + '40';
       const y = Y(p.y, 0);
       ctx.fillRect(X(p.x0), y, Math.max(1, X(Math.min(p.x1, xMax)) - X(p.x0)), pad.t + ph - y);
     });
@@ -122,13 +122,18 @@ function drawProfile(cv, steps) {
   }
   let x = 0;
   steps.forEach(s => {
-    const d = estStepSec(s), bw = d / total * pw, bh = s.speed / (maxV * 1.1) * ph;
-    ctx.fillStyle = accent;
-    ctx.globalAlpha = 0.35 + 0.65 * (s.speed / maxV);
-    ctx.fillRect(pad.l + x / total * pw + 0.5, pad.t + ph - bh, Math.max(1, bw - 1), bh);
+    const d = estStepSec(s), bw = d / total * pw, bh = Math.max(s.speed > 0 ? 0 : 3, s.speed / (maxV * 1.1) * ph);
+    const x0 = pad.l + x / total * pw + 0.5;
+    ctx.fillStyle = stepColor(s);
+    ctx.fillRect(x0, pad.t + ph - bh, Math.max(1, bw - 1), bh);
+    // Etiqueta de la zona dentro de la barra si cabe (con "♥" si es por pulso)
+    const z = stepZone(s);
+    if (z && bw >= 26 && bh >= 16) {
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui, Segoe UI, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(`${s.target === 'hr' ? '♥' : ''}Z${z}`, x0 + bw / 2, pad.t + ph - bh + 3);
+    }
     x += d;
   });
-  ctx.globalAlpha = 1;
   ctx.fillStyle = muted; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   const xs = niceStep(total / 60, 6) * 60;
   for (let t = 0; t <= total; t += xs) ctx.fillText(fmtTime(t), pad.l + t / total * pw, h - pad.b + 4);

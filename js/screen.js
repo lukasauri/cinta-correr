@@ -19,6 +19,46 @@ function hrZoneOf(hr) {
   for (let i = 1; i < 5; i++) if (hr >= floors[i]) z = i + 1;
   return z;
 }
+/* ---------- Zonas de ritmo ---------- */
+// Inicio (el ritmo más lento) de Z2…Z5 en % del ritmo umbral: Z1 > 129 %, Z2 114–129 %, Z3 106–113 %,
+// Z4 99–105 %, Z5 < 99 % (zonas de ritmo de carrera de Joe Friel).
+const PACE_ZONE_PCTS = [1.29, 1.13, 1.05, 0.99];
+const PAUSE_COLOR = '#475569';
+
+/** Ritmos (s/km) en los que empiezan Z2…Z5, de más lento a más rápido. */
+function paceZoneConfig() {
+  const S = App.settings;
+  if (S.paceZoneMode === 'custom' && Array.isArray(S.paceCustom) && S.paceCustom.length === 4) return { starts: S.paceCustom, source: 'custom' };
+  const T = S.thresholdPace || 300;
+  return { starts: PACE_ZONE_PCTS.map(p => Math.round(T * p)), source: 'threshold' };
+}
+/** Zona de ritmo (1–5) de una velocidad; 0 si está parado. */
+function paceZoneOf(kmh) {
+  if (!(kmh > 0)) return 0;
+  const pace = 3600 / kmh;
+  let z = 1;
+  paceZoneConfig().starts.forEach((s, i) => { if (pace <= s + 0.5) z = i + 2; });
+  return z;
+}
+/** Rangos de las zonas de ritmo en la unidad elegida. */
+function paceZoneRanges() {
+  const st = paceZoneConfig().starts;
+  const f = sec => isPace() ? fmtTime(sec).replace(/^0/, '') : (3600 / sec).toFixed(1);
+  const u = isPace() ? '/km' : 'km/h';
+  return isPace()
+    ? [`más lento de ${f(st[0])} ${u}`, `${f(st[0])}–${f(st[1])} ${u}`, `${f(st[1])}–${f(st[2])} ${u}`, `${f(st[2])}–${f(st[3])} ${u}`, `más rápido de ${f(st[3])} ${u}`]
+    : [`menos de ${f(st[0])} ${u}`, `${f(st[0])}–${f(st[1])} ${u}`, `${f(st[1])}–${f(st[2])} ${u}`, `${f(st[2])}–${f(st[3])} ${u}`, `más de ${f(st[3])} ${u}`];
+}
+
+/** Zona de un paso del entrenamiento: la de pulso si es por pulso; si no, la de ritmo (0 = pausa). */
+function stepZone(st) { return st.target === 'hr' ? st.zone : paceZoneOf(st.speed); }
+function stepColor(st) { const z = stepZone(st); return z ? ZONE_COLORS[z - 1] : PAUSE_COLOR; }
+/** Objetivo de un paso en texto. */
+function fmtStepTarget(st) {
+  if (st.target === 'hr') return `Zona ${st.zone} de pulso (${hrZoneRanges()[st.zone - 1]} ppm)`;
+  return fmtTarget(st.speed);
+}
+
 /** Texto del rango de cada zona: "120–139", …, "175–190". */
 function hrZoneRanges() {
   const { floors, max } = hrZoneConfig();
@@ -203,7 +243,8 @@ function updateTargetBox() {
   const first = w && w.steps[0];
   const kmh = first ? first.speed : App.targetSpeed;
   const what = pace ? 'Ritmo' : 'Velocidad';
-  setText($('#targetLabel'), s ? `${what} objetivo` : first ? 'El entrenamiento empieza a' : `${what} inicial`);
+  const cur = s && s.steps && s.steps[s.stepIdx];
+  setText($('#targetLabel'), s ? (cur && cur.target === 'hr' ? `Ajuste por pulso (Z${cur.zone})` : `${what} objetivo`) : first ? 'El entrenamiento empieza a' : `${what} inicial`);
   setText($('#targetSpeed'), kmh > 0 ? fmtMain(kmh) : (pace ? '--:--' : '0.0'));
   setText($('#targetUnit'), pace ? '/km' : 'km/h');
   setText($('#targetAlt'), kmh > 0 ? (pace ? `${fmtAlt(kmh)} km/h` : `${fmtAlt(kmh)} /km`) : (first ? 'pausa' : ''));
@@ -218,7 +259,13 @@ function updateCustom(type, item, c, force, now) {
   if (type === 'step') {
     if (c.step) {
       setText(el.querySelector('.st-title'), `${c.step.name || 'Paso'}  ·  ${c.stepIdx + 1}/${c.nSteps}`);
-      setText(el.querySelector('.st-target'), fmtTarget(c.step.speed));
+      let txt = fmtStepTarget(c.step);
+      if (c.step.target === 'hr') {
+        const state = { up: '↑ subiendo', down: '↓ bajando', ok: '✓ en zona', wait: '… esperando al pulso', cap: '⚠ al máximo', floor: '⚠ al mínimo', nohr: '⚠ sin pulso' }[c.session.hrState] || 'ajustando…';
+        txt += ` · ahora ${fmtMain(c.target)} ${isPace() ? '/km' : 'km/h'} · ${state}`;
+      }
+      setText(el.querySelector('.st-target'), txt);
+      el.style.setProperty('--stepc', stepColor(c.step));
       el.querySelector('.bar-fill').style.width = (c.stepFrac * 100).toFixed(1) + '%';
     } else {
       setText(el.querySelector('.st-title'), c.session ? 'Carrera libre' : (c.previewSteps ? selectedWorkout().name : 'Carrera libre'));
@@ -229,7 +276,7 @@ function updateCustom(type, item, c, force, now) {
     const n = c.nextStep;
     if (n) {
       setText(el.querySelector('.st-title'), n.name || 'Siguiente');
-      setText(el.querySelector('.st-target'), `${fmtTarget(n.speed)} · ${n.type === 'time' ? fmtTime(n.value) : fmtDist(n.value)}`);
+      setText(el.querySelector('.st-target'), `${fmtStepTarget(n)} · ${n.type === 'time' ? fmtTime(n.value) : fmtDist(n.value)}`);
     } else {
       setText(el.querySelector('.st-title'), c.step ? 'Último paso' : '—');
       setText(el.querySelector('.st-target'), c.step ? 'Al terminar se detiene la cinta' : '');
@@ -237,13 +284,13 @@ function updateCustom(type, item, c, force, now) {
   } else if (type === 'progress') {
     const steps = c.steps || c.previewSteps;
     const segs = el.querySelector('.prog-segs');
-    const key = steps ? JSON.stringify(steps.map(s => [s.type, s.value, s.speed])) : '';
+    const key = steps ? JSON.stringify([steps.map(s => [s.type, s.value, s.speed, s.target, s.zone]), App.settings.thresholdPace, App.settings.paceCustom, App.settings.paceZoneMode]) : '';
     if (item.cache.key !== key) {
       item.cache.key = key;
       segs.innerHTML = '';
       if (steps) {
         const maxV = Math.max(...steps.map(s => s.speed), 1);
-        steps.forEach(s => segs.append(h('div', { class: 'seg', style: { flexGrow: Math.max(1, estStepSec(s)), height: (20 + 80 * s.speed / maxV) + '%' }, title: `${s.name || ''} ${s.speed} km/h` })));
+        steps.forEach(s => segs.append(h('div', { class: 'seg', style: { flexGrow: Math.max(1, estStepSec(s)), height: (20 + 80 * s.speed / maxV) + '%', background: stepColor(s) }, title: `${s.name || ''} · ${fmtStepTarget(s)}` })));
       }
     }
     const marker = el.querySelector('.prog-marker');
@@ -270,7 +317,7 @@ function updateCustom(type, item, c, force, now) {
     const steps = c.steps || c.previewSteps;
     if (steps) {
       let x = 0;
-      profile = steps.map(st => { const d = estStepSec(st); const p = { x0: x, x1: x + d, y: st.speed }; x += d; return p; });
+      profile = steps.map(st => { const d = estStepSec(st); const p = { x0: x, x1: x + d, y: st.speed, color: stepColor(st) }; x += d; return p; });
       xMax = Math.max(xMax, x);
     }
     drawLineChart(el.querySelector('canvas'), {

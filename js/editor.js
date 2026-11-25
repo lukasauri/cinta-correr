@@ -4,7 +4,9 @@
 function estStepSec(st) { return st.type === 'time' ? st.value : (st.speed > 0 ? st.value / (st.speed / 3.6) : 0); }
 function estStepDist(st) { return st.type === 'dist' ? st.value : st.value * st.speed / 3.6; }
 function workoutTotals(w) { return w.steps.reduce((a, s) => ({ sec: a.sec + estStepSec(s), dist: a.dist + estStepDist(s) }), { sec: 0, dist: 0 }); }
-function mkStep(name, type, value, speed) { return { id: uid(), name, type, value, speed }; }
+/** Paso: objetivo por ritmo/velocidad (target 'speed') o por zona de pulso (target 'hr': zone 1–5,
+ *  speed = con lo que empieza, maxSpeed = lo más rápido que puede poner la app). */
+function mkStep(name, type, value, speed, extra) { return { id: uid(), name, type, value, speed, ...(extra || {}) }; }
 
 function sampleWorkouts() {
   const intervals = [mkStep('Calentamiento', 'time', 300, 6)];
@@ -105,7 +107,7 @@ function renderEditor() {
   w.steps.forEach((st, i) => tbody.append(stepRow(w, st, i)));
   box.append(h('div', { class: 'table-wrap' }, h('table', { class: 'steps' },
     h('thead', {}, h('tr', {}, h('th', {}, '#'), h('th', {}, 'Nombre'), h('th', {}, 'Tipo'), h('th', {}, 'Duración / distancia'),
-      h('th', {}, usePace ? 'Ritmo' : 'Velocidad'), h('th', {}, usePace ? 'Velocidad' : 'Ritmo'), h('th', {}))),
+      h('th', {}, 'Objetivo'), h('th', {}), h('th', {}), h('th', {}))),
     tbody)));
 
   box.append(h('div', { class: 'row gap' },
@@ -114,39 +116,85 @@ function renderEditor() {
 
   box.append(h('div', { class: 'muted', id: 'woSummary' }));
   box.append(h('canvas', { id: 'woPreview', class: 'preview' }));
+  box.append(zoneLegend());
   box.append(h('p', { class: 'muted small' }, usePace
     ? 'Duración: escribe mm:ss (p. ej. 1:30) o minutos (p. ej. 5). Distancia en metros. Ritmo en min/km (p. ej. 5:30). Deja el ritmo vacío o pon 0 para que la cinta se pause durante ese paso (solo en pasos por tiempo).'
-    : 'Duración: escribe mm:ss (p. ej. 1:30) o minutos (p. ej. 5). Distancia en metros. Velocidad 0 = la cinta se pausa durante ese paso (solo en pasos por tiempo).'));
+    : 'Duración: escribe mm:ss (p. ej. 1:30) o minutos (p. ej. 5). Distancia en metros. Velocidad 0 = la cinta se pausa durante ese paso (solo en pasos por tiempo).'),
+    h('p', { class: 'muted small' }, 'Paso por zona de pulso: la cinta empieza al ritmo indicado y la app lo ajusta poco a poco para mantener el pulso en la zona, sin pasar nunca del máximo. Necesita el pulsómetro conectado; si se pierde el pulso, mantiene la velocidad.'));
   requestAnimationFrame(() => updateEditorSummary(w));
 }
 
+/** Campo de ritmo o velocidad (según las unidades) para un valor en km/h. allowZero: vacío/0 = pausa. */
+function speedInput(get, set, allowZero) {
+  const usePace = isPace();
+  const show = () => usePace ? (get() > 0 ? fmtPace(get()) : '') : get();
+  const input = h('input', {
+    class: 'in-speed', placeholder: usePace ? 'm:ss' : 'km/h', value: show(),
+    ...(usePace ? {} : { type: 'number', step: '0.1', min: '0', max: '25' }),
+    onchange: e => {
+      let v = usePace ? paceToKmh(e.target.value) : parseFloat(e.target.value);
+      if (usePace && v === null) { toast('Escribe el ritmo como minutos:segundos por km, p. ej. 5:30', 'warn'); e.target.value = show(); return; }
+      if (isNaN(v) || v < 0) v = 0;
+      if (!usePace) v = Math.round(v * 10) / 10;
+      if (v <= 0 && !allowZero) { toast('Pon un ritmo o velocidad', 'warn'); e.target.value = show(); return; }
+      if (set(Math.min(v, 25)) === false) { e.target.value = show(); return; }
+      e.target.value = show();
+    }
+  });
+  return h('span', { class: 'speed-in' }, input, h('span', { class: 'muted' }, usePace ? ' /km' : ' km/h'));
+}
+
 function stepRow(w, st, i) {
-  const usePace = App.settings.workoutUnit === 'pace';
-  const other = () => usePace ? (st.speed > 0 ? `${st.speed.toFixed(1)} km/h` : 'pausa') : fmtPace(st.speed);
-  const paceCell = h('td', { class: 'muted' }, other());
-  /** Guarda la velocidad nueva (km/h); false si no es válida para este paso. */
-  const setSpeed = (v, input) => {
-    if (st.type === 'dist' && v <= 0) { toast('Un paso por distancia necesita un ritmo o velocidad', 'warn'); input.value = usePace ? (st.speed > 0 ? fmtPace(st.speed) : '') : st.speed; return; }
-    st.speed = v; paceCell.textContent = other(); workoutChanged(w);
+  const usePace = isPace();
+  const isHr = st.target === 'hr';
+  const chip = h('span', { class: 'zone-chip' });
+  const paintChip = () => {
+    const z = stepZone(st);
+    chip.textContent = z ? `Z${z}` : 'pausa';
+    chip.style.setProperty('--zc', stepColor(st));
+    chip.title = isHr ? 'Zona de pulso' : 'Zona de ritmo';
   };
-  const speedCell = usePace
-    ? h('td', {}, h('input', {
-      class: 'in-speed', placeholder: 'm:ss', value: st.speed > 0 ? fmtPace(st.speed) : '',
-      onchange: e => {
-        const v = paceToKmh(e.target.value);
-        if (v === null) { toast('Escribe el ritmo como minutos:segundos por km, p. ej. 5:30', 'warn'); e.target.value = st.speed > 0 ? fmtPace(st.speed) : ''; return; }
-        setSpeed(Math.min(v, 25), e.target);
-        if (st.speed > 0) e.target.value = fmtPace(st.speed);
-      }
-    }), h('span', { class: 'muted' }, ' /km'))
-    : h('td', {}, h('input', {
-      type: 'number', step: '0.1', min: '0', max: '25', class: 'in-speed', value: st.speed,
-      onchange: e => {
-        let v = parseFloat(e.target.value);
-        if (isNaN(v) || v < 0) v = 0;
-        setSpeed(Math.round(Math.min(v, 25) * 10) / 10, e.target);
-      }
-    }), h('span', { class: 'muted' }, ' km/h'));
+  paintChip();
+  const changed = (structural) => { paintChip(); workoutChanged(w, structural); };
+
+  // Objetivo: ritmo/velocidad o zona de pulso
+  const targetSel = h('select', {
+    value: isHr ? 'hr' : 'speed', onchange: e => {
+      if (e.target.value === 'hr') {
+        st.target = 'hr';
+        st.zone = st.zone || 2;
+        if (!(st.speed > 0)) st.speed = 3600 / (App.settings.freeStartPace || 360);
+        st.maxSpeed = st.maxSpeed > st.speed ? st.maxSpeed : Math.round((st.speed + 2) * 10) / 10;
+      } else { delete st.target; delete st.zone; delete st.maxSpeed; }
+      changed(true);
+    }
+  }, h('option', { value: 'speed' }, usePace ? 'Ritmo' : 'Velocidad'), h('option', { value: 'hr' }, 'Zona de pulso'));
+
+  let valueCell, detailCell;
+  if (isHr) {
+    const ranges = hrZoneRanges();
+    valueCell = h('td', {}, h('select', { class: 'zone-sel', value: String(st.zone), onchange: e => { st.zone = parseInt(e.target.value, 10); changed(); } },
+      ZONE_NAMES.map((n, z) => h('option', { value: String(z + 1) }, `Z${z + 1} · ${ranges[z]} ppm`))));
+    detailCell = h('td', { class: 'hr-detail' },
+      h('label', {}, h('small', { class: 'muted' }, 'empieza'), speedInput(() => st.speed, v => {
+        if (st.maxSpeed && v > st.maxSpeed) { toast('El inicio no puede ser más rápido que el máximo', 'warn'); return false; }
+        st.speed = v; changed();
+      })),
+      h('label', {}, h('small', { class: 'muted' }, 'máximo'), speedInput(() => st.maxSpeed, v => {
+        if (v < st.speed) { toast('El máximo no puede ser más lento que el inicio', 'warn'); return false; }
+        st.maxSpeed = v; changed();
+      })));
+  } else {
+    const other = h('span', { class: 'muted' });
+    const paintOther = () => { other.textContent = usePace ? (st.speed > 0 ? `${st.speed.toFixed(1)} km/h` : '') : (st.speed > 0 ? `${fmtPace(st.speed)} /km` : ''); };
+    paintOther();
+    valueCell = h('td', {}, speedInput(() => st.speed, v => {
+      if (st.type === 'dist' && v <= 0) { toast('Un paso por distancia necesita un ritmo o velocidad', 'warn'); return false; }
+      st.speed = v; paintOther(); changed();
+    }, true));
+    detailCell = h('td', {}, other);
+  }
+
   const valInput = h('input', {
     class: 'in-val', value: st.type === 'time' ? fmtTime(st.value) : String(st.value),
     onchange: e => {
@@ -168,13 +216,23 @@ function stepRow(w, st, i) {
       }
     }, h('option', { value: 'time' }, 'Tiempo'), h('option', { value: 'dist' }, 'Distancia'))),
     h('td', {}, valInput, st.type === 'dist' ? h('span', { class: 'muted' }, ' m') : null),
-    speedCell,
-    paceCell,
+    h('td', {}, targetSel),
+    valueCell,
+    detailCell,
+    h('td', {}, chip),
     h('td', { class: 'row-actions' },
       h('button', { class: 'mini', title: 'Subir', onclick: () => move(-1) }, '↑'),
       h('button', { class: 'mini', title: 'Bajar', onclick: () => move(1) }, '↓'),
       h('button', { class: 'mini', title: 'Duplicar', onclick: () => { w.steps.splice(i + 1, 0, { ...st, id: uid() }); workoutChanged(w, true); } }, '⧉'),
       h('button', { class: 'mini danger', title: 'Borrar', onclick: () => { w.steps.splice(i, 1); workoutChanged(w, true); } }, '✕')));
+}
+
+/** Leyenda de colores del gráfico del entrenamiento. */
+function zoneLegend() {
+  return h('div', { class: 'zone-legend' },
+    ZONE_COLORS.map((c, i) => h('span', { style: { '--zc': c } }, `Z${i + 1} ${ZONE_NAMES[i]}`)),
+    h('span', { style: { '--zc': PAUSE_COLOR } }, 'Pausa'),
+    h('small', { class: 'muted' }, 'Pasos por ritmo: zonas de ritmo · pasos por pulso: zonas de pulso (Ajustes > Perfil)'));
 }
 
 function openSeriesDialog(w) {
@@ -223,7 +281,8 @@ function importWorkoutFile() {
       list.forEach(w => {
         if (!w || !Array.isArray(w.steps)) return;
         const steps = w.steps.filter(s => s && (s.type === 'time' || s.type === 'dist') && s.value > 0)
-          .map(s => mkStep(String(s.name || ''), s.type, Number(s.value), Number(s.speed) || 0));
+          .map(s => mkStep(String(s.name || ''), s.type, Number(s.value), Number(s.speed) || 0,
+            s.target === 'hr' && s.zone >= 1 && s.zone <= 5 ? { target: 'hr', zone: Number(s.zone), maxSpeed: Number(s.maxSpeed) || (Number(s.speed) || 8) + 2 } : null));
         App.workouts.push({ id: uid(), name: String(w.name || 'Importado'), steps });
         n++;
       });
