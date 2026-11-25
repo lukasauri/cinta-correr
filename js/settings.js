@@ -24,15 +24,34 @@ function renderSettings() {
       num('maxHr', 'Frecuencia cardiaca máxima (ppm)', { min: 120, max: 230, step: 1 }, 'Define las zonas de pulso (Z1 < 60 %, Z2 60–70 %, Z3 70–80 %, Z4 80–90 %, Z5 > 90 %).')),
     integrationsCard(),
     card('Cinta',
-      num('freeStartSpeed', 'Velocidad inicial en carrera libre (km/h)', { min: 0.5, max: 20, step: 0.1 }),
-      num('speedStep', 'Incremento de los botones + / − y flechas (km/h)', { min: 0.1, max: 2, step: 0.1 }),
-      field('Botones de velocidad rápida (km/h)', h('input', {
-        type: 'text', value: S.presets.join(' '),
-        onchange: e => {
-          const arr = e.target.value.split(/[;\s]+/).map(x => parseFloat(x.replace(',', '.'))).filter(x => x > 0 && x <= 25);
-          S.presets = arr; e.target.value = arr.join(' '); save();
-        }
-      }), 'Separadas por espacios, p. ej.: 4 6 8 10 12'),
+      field('Unidades', h('select', { value: S.workoutUnit, onchange: e => setUnits(e.target.value) },
+        h('option', { value: 'speed' }, 'Velocidad en km/h'),
+        h('option', { value: 'pace' }, 'Ritmo en min/km')),
+        'Se usa en toda la app: objetivo y botones mientras corres, datos de la pantalla y entrenamientos.'),
+      ...(isPace() ? [
+        field('Ritmo inicial en carrera libre (min/km)', h('input', {
+          type: 'text', value: fmtPace(S.freeStartSpeed),
+          onchange: e => { const k = paceToKmh(e.target.value); if (k > 0) { S.freeStartSpeed = k; save(); } e.target.value = fmtPace(S.freeStartSpeed); }
+        })),
+        num('paceStep', 'Salto de los botones + / − y flechas (segundos por km)', { min: 1, max: 60, step: 1 }, 'Con 5: 5:30 → 5:25 (más rápido) o 5:35 (más despacio).'),
+        field('Botones de ritmo rápido (min/km)', h('input', {
+          type: 'text', value: (S.pacePresets || []).map(fmtTime).map(t => t.replace(/^0/, '')).join(' '),
+          onchange: e => {
+            const arr = e.target.value.split(/[;\s]+/).filter(Boolean).map(x => parseTime(x)).filter(x => x >= 120 && x <= 3600);
+            S.pacePresets = arr; e.target.value = arr.map(fmtTime).map(t => t.replace(/^0/, '')).join(' '); save();
+          }
+        }), 'Separados por espacios, p. ej.: 7:00 6:30 6:00 5:30 5:00'),
+      ] : [
+        num('freeStartSpeed', 'Velocidad inicial en carrera libre (km/h)', { min: 0.5, max: 20, step: 0.1 }),
+        num('speedStep', 'Incremento de los botones + / − y flechas (km/h)', { min: 0.1, max: 2, step: 0.1 }),
+        field('Botones de velocidad rápida (km/h)', h('input', {
+          type: 'text', value: S.presets.join(' '),
+          onchange: e => {
+            const arr = e.target.value.split(/[;\s]+/).map(x => parseFloat(x.replace(',', '.'))).filter(x => x > 0 && x <= 25);
+            S.presets = arr; e.target.value = arr.join(' '); save();
+          }
+        }), 'Separadas por espacios, p. ej.: 4 6 8 10 12'),
+      ]),
       sel('distSource', 'Distancia', [['calc', 'Calculada por la app (a partir de la velocidad)'], ['machine', 'La que envía la cinta']]),
       sel('kcalSource', 'Calorías', [['calc', 'Calculadas por la app (peso + velocidad)'], ['machine', 'Las que envía la cinta']]),
       chk('showAllDevices', 'Mostrar todos los dispositivos Bluetooth al buscar la cinta', 'Actívalo si tu cinta no aparece en la lista.'),

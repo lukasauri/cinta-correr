@@ -97,9 +97,13 @@ function statGrid(sum) {
   const items = [
     ['Tiempo', fmtTime(sum.elapsed)],
     ['Distancia', `${(sum.dist / 1000).toFixed(2)} km`],
-    ['Ritmo medio', `${fmtPace(sum.elapsed ? sum.dist / sum.elapsed * 3.6 : 0)} /km`],
-    ['Vel. media', `${(sum.elapsed ? sum.dist / sum.elapsed * 3.6 : 0).toFixed(1)} km/h`],
-    ['Vel. máx.', `${(sum.maxSpeed || 0).toFixed(1)} km/h`],
+    // En la unidad elegida en Ajustes primero; la otra media después.
+    ...(() => {
+      const avg = sum.elapsed ? sum.dist / sum.elapsed * 3.6 : 0;
+      const pace = [['Ritmo medio', `${fmtPace(avg)} /km`], ['Ritmo máx.', `${fmtPace(sum.maxSpeed || 0)} /km`], ['Vel. media', `${avg.toFixed(1)} km/h`]];
+      const speed = [['Vel. media', `${avg.toFixed(1)} km/h`], ['Vel. máx.', `${(sum.maxSpeed || 0).toFixed(1)} km/h`], ['Ritmo medio', `${fmtPace(avg)} /km`]];
+      return isPace() ? pace : speed;
+    })(),
     ['Calorías', `${sum.kcal} kcal`],
     ['Pulso medio', sum.avgHr ? `${sum.avgHr} ppm` : '—'],
     ['Pulso máx.', sum.maxHr ? `${sum.maxHr} ppm` : '—'],

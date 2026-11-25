@@ -5,10 +5,15 @@ const ZONE_COLORS = ['#94a3b8', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444'];
 const ZONE_NAMES = ['Recuperación', 'Base aeróbica', 'Aeróbico', 'Umbral', 'Máximo'];
 
 const WIDGETS = {
-  speed: { name: 'Velocidad', unit: 'km/h', val: c => c.speed.toFixed(1), sub: c => c.session ? `objetivo ${App.settings.workoutUnit === 'pace' ? fmtPace(c.target) + ' /km' : c.target.toFixed(1)}` : '' },
-  target: { name: 'Velocidad objetivo', unit: 'km/h', val: c => c.target.toFixed(1) },
-  targetPace: { name: 'Ritmo objetivo', unit: 'min/km', val: c => fmtPace(c.target) },
-  pace: { name: 'Ritmo', unit: 'min/km', val: c => fmtPace(c.speed) },
+  // Los widgets de velocidad siguen la unidad elegida en Ajustes: el "principal" la usa y el
+  // "secundario" muestra la otra (en km/h: velocidad y ritmo; en min/km: ritmo y velocidad).
+  speed: {
+    name: 'Velocidad / ritmo (principal)', label: () => isPace() ? 'Ritmo' : 'Velocidad', unit: () => mainUnit(), val: c => fmtMain(c.speed),
+    sub: c => c.session ? `objetivo ${fmtMain(c.target)}${isPace() ? ' /km' : ''}` : ''
+  },
+  pace: { name: 'Velocidad / ritmo (secundario)', label: () => isPace() ? 'Velocidad' : 'Ritmo', unit: () => altUnit(), val: c => fmtAlt(c.speed) },
+  target: { name: 'Objetivo (principal)', label: () => isPace() ? 'Ritmo objetivo' : 'Velocidad objetivo', unit: () => mainUnit(), val: c => fmtMain(c.target) },
+  targetPace: { name: 'Objetivo (secundario)', label: () => isPace() ? 'Velocidad objetivo' : 'Ritmo objetivo', unit: () => altUnit(), val: c => fmtAlt(c.target) },
   time: { name: 'Tiempo', val: c => fmtTime(c.elapsed) },
   distance: { name: 'Distancia', unit: 'km', val: c => (c.dist / 1000).toFixed(2) },
   kcal: { name: 'Calorías', unit: 'kcal', val: c => Math.round(c.kcal) },
@@ -18,8 +23,8 @@ const WIDGETS = {
     color: c => c.hr ? ZONE_COLORS[c.zone - 1] : null
   },
   hrZone: { name: 'Zona de pulso', custom: 'zone' },
-  avgSpeed: { name: 'Velocidad media', unit: 'km/h', val: c => c.avgSpeed.toFixed(1) },
-  avgPace: { name: 'Ritmo medio', unit: 'min/km', val: c => fmtPace(c.avgSpeed) },
+  avgSpeed: { name: 'Media (principal)', label: () => isPace() ? 'Ritmo medio' : 'Velocidad media', unit: () => mainUnit(), val: c => fmtMain(c.avgSpeed) },
+  avgPace: { name: 'Media (secundaria)', label: () => isPace() ? 'Velocidad media' : 'Ritmo medio', unit: () => altUnit(), val: c => fmtAlt(c.avgSpeed) },
   avgHr: { name: 'Pulso medio', unit: 'ppm', val: c => c.avgHr || '--' },
   maxHr: { name: 'Pulso máximo', unit: 'ppm', val: c => c.maxHrSess || '--' },
   stepRemaining: {
@@ -87,7 +92,7 @@ function renderGrid() {
     const def = WIDGETS[w.id];
     if (!def) return;
     const el = h('div', { class: `widget size-${w.size} w-${w.id}`, 'data-i': i });
-    el.append(h('div', { class: 'w-label' }, def.name));
+    el.append(h('div', { class: 'w-label' }, def.label ? def.label() : def.name));
     if (def.custom) buildCustom(def.custom, el);
     else {
       el.append(h('div', { class: 'w-main' }, h('span', { class: 'w-num' }, '--'), h('span', { class: 'w-unit' })));
@@ -164,10 +169,13 @@ function updateGrid(force) {
     const col = def.color ? def.color(c) : null;
     el.style.setProperty('--wcolor', col || 'var(--text)');
   });
+  // Objetivo en la barra de control: grande en la unidad elegida, la otra debajo.
   const tEl = $('#targetSpeed');
-  if (tEl) setText(tEl, (App.targetSpeed || 0).toFixed(1));
+  if (tEl) setText(tEl, fmtMain(App.targetSpeed));
   const tLbl = $('#targetLabel');
-  if (tLbl) setText(tLbl, App.settings.workoutUnit === 'pace' && App.targetSpeed > 0 ? `objetivo · ${fmtPace(App.targetSpeed)} /km` : 'objetivo km/h');
+  if (tLbl) setText(tLbl, `objetivo ${mainUnit()}`);
+  const tAlt = $('#targetAlt');
+  if (tAlt) setText(tAlt, App.targetSpeed > 0 ? `${fmtAlt(App.targetSpeed)} ${altUnit()}` : '');
 }
 
 function updateCustom(type, item, c, force, now) {
@@ -179,7 +187,7 @@ function updateCustom(type, item, c, force, now) {
       el.querySelector('.bar-fill').style.width = (c.stepFrac * 100).toFixed(1) + '%';
     } else {
       setText(el.querySelector('.st-title'), c.session ? 'Carrera libre' : (c.previewSteps ? selectedWorkout().name : 'Carrera libre'));
-      setText(el.querySelector('.st-target'), c.session ? `${c.target.toFixed(1)} km/h` : 'Pulsa Iniciar');
+      setText(el.querySelector('.st-target'), c.session ? fmtTarget(c.target) : 'Pulsa Iniciar');
       el.querySelector('.bar-fill').style.width = '0%';
     }
   } else if (type === 'next') {

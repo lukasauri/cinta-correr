@@ -95,10 +95,10 @@ function renderEditor() {
   const usePace = App.settings.workoutUnit === 'pace';
   const unitBtn = (unit, label) => h('button', {
     class: 'unit-btn' + (App.settings.workoutUnit === unit ? ' active' : ''),
-    onclick: () => { App.settings.workoutUnit = unit; Store.set('settings', App.settings); renderEditor(); updateGrid(true); }
+    onclick: () => setUnits(unit)
   }, label);
   box.append(h('div', { class: 'row gap wrap' },
-    h('span', { class: 'muted' }, 'Escribir los entrenamientos en:'),
+    h('span', { class: 'muted' }, 'Unidades (en toda la app):'),
     h('div', { class: 'unit-switch' }, unitBtn('speed', 'Velocidad (km/h)'), unitBtn('pace', 'Ritmo (min/km)'))));
 
   const tbody = h('tbody');

@@ -5,6 +5,7 @@ const DEFAULT_SETTINGS = {
   weight: 75, maxHr: 190, distSource: 'calc', kcalSource: 'calc',
   voice: true, beeps: true, countdown: 3,
   presets: [4, 6, 8, 10, 12], speedStep: 0.5, freeStartSpeed: 4,
+  pacePresets: [420, 390, 360, 330, 300], paceStep: 5, // en min/km: ritmos rápidos (segundos/km) y salto de +/− (s)
   showAllDevices: false, autoReconnect: true,
   uploadGarmin: false, uploadStrava: false,
   workoutUnit: 'speed', // 'speed' (km/h) o 'pace' (min/km) para escribir los entrenamientos
@@ -473,10 +474,12 @@ function finishSession() {
 /* ---------- Velocidad ---------- */
 
 let speedTimer = null;
-function setTarget(kmh) {
+/** Fija la velocidad objetivo. En min/km se guardan 3 decimales para que el ritmo quede exacto también a ritmos lentos. */
+function setTarget(kmh, decimals = isPace() ? 3 : 1) {
   const t = App.treadmill;
   const r = (t && t.speedRange) || { min: 0.5, max: 20 };
-  kmh = Math.round(clamp(kmh, r.min, r.max) * 10) / 10;
+  const f = Math.pow(10, decimals);
+  kmh = Math.round(clamp(kmh, r.min, r.max) * f) / f;
   App.targetSpeed = kmh;
   App.lastCmdAt = Date.now();
   const s = App.session;
@@ -492,11 +495,35 @@ function setTarget(kmh) {
   }, 250);
 }
 
+/** +/− : dir = +1 más rápido, −1 más despacio. En min/km salta de paceStep en paceStep (p. ej. 5:30 → 5:25). */
+function changeTarget(dir) {
+  const cur = App.targetSpeed || App.live.speed || App.settings.freeStartSpeed;
+  if (!isPace()) return setTarget(cur + dir * App.settings.speedStep);
+  const step = Math.max(1, Math.round(App.settings.paceStep || 5));
+  const sec = Math.round(3600 / Math.max(cur, 0.5));
+  const next = dir > 0 ? Math.floor((sec - 1) / step) * step : Math.ceil((sec + 1) / step) * step;
+  setTarget(3600 / Math.max(next, 60));
+}
+
 function renderPresets() {
   const box = $('#presets');
   if (!box) return;
   box.innerHTML = '';
-  App.settings.presets.forEach(p => box.append(h('button', { class: 'btn preset', onclick: () => setTarget(p) }, p)));
+  if (isPace()) {
+    (App.settings.pacePresets || []).forEach(sec => box.append(h('button', { class: 'btn preset', title: `${(3600 / sec).toFixed(1)} km/h`, onclick: () => setTarget(3600 / sec) }, fmtTime(sec).replace(/^0/, ''))));
+  } else {
+    App.settings.presets.forEach(p => box.append(h('button', { class: 'btn preset', title: `${fmtPace(p)} /km`, onclick: () => setTarget(p) }, p)));
+  }
+}
+
+/** Cambia las unidades de toda la app. */
+function setUnits(unit) {
+  App.settings.workoutUnit = unit === 'pace' ? 'pace' : 'speed';
+  Store.set('settings', App.settings);
+  renderPresets();
+  renderGrid();
+  if ($('#view-workouts').classList.contains('active')) renderEditor();
+  if ($('#view-settings').classList.contains('active')) renderSettings();
 }
 
 /* ---------- Interfaz ---------- */
@@ -578,8 +605,8 @@ function init() {
   $('#btnStart').onclick = startSession;
   $('#btnPause').onclick = togglePause;
   $('#btnStop').onclick = finishSession;
-  $('#btnSlower').onclick = () => setTarget((App.targetSpeed || App.live.speed) - App.settings.speedStep);
-  $('#btnFaster').onclick = () => setTarget((App.targetSpeed || App.live.speed) + App.settings.speedStep);
+  $('#btnSlower').onclick = () => changeTarget(-1);
+  $('#btnFaster').onclick = () => changeTarget(1);
   $('#btnPrevStep').onclick = () => App.session && gotoStep(App.session.stepIdx - 1);
   $('#btnNextStep').onclick = () => {
     const s = App.session;
