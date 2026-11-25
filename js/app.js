@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS = {
   presets: [4, 6, 8, 10, 12], speedStep: 0.5, freeStartSpeed: 4,
   showAllDevices: false, autoReconnect: true,
   uploadGarmin: false, uploadStrava: false,
+  workoutUnit: 'speed', // 'speed' (km/h) o 'pace' (min/km) para escribir los entrenamientos
 };
 
 const DEFAULT_LAYOUT = {
@@ -262,7 +263,7 @@ function applyStep(first) {
 
 function describeStep(st) {
   const amount = st.type === 'time' ? speakDuration(st.value) : `${st.value} metros`;
-  return st.speed > 0 ? `${st.name ? st.name + '. ' : ''}${speakSpeed(st.speed)} durante ${amount}` : `${st.name ? st.name + '. ' : ''}Pausa de ${amount}`;
+  return st.speed > 0 ? `${st.name ? st.name + '. ' : ''}${speakTarget(st.speed)} durante ${amount}` : `${st.name ? st.name + '. ' : ''}Pausa de ${amount}`;
 }
 
 function announceStep(st) { Sound.say(describeStep(st)); }

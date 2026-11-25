@@ -92,10 +92,20 @@ function renderEditor() {
       }
     }, 'Eliminar')));
 
+  const usePace = App.settings.workoutUnit === 'pace';
+  const unitBtn = (unit, label) => h('button', {
+    class: 'unit-btn' + (App.settings.workoutUnit === unit ? ' active' : ''),
+    onclick: () => { App.settings.workoutUnit = unit; Store.set('settings', App.settings); renderEditor(); updateGrid(true); }
+  }, label);
+  box.append(h('div', { class: 'row gap wrap' },
+    h('span', { class: 'muted' }, 'Escribir los entrenamientos en:'),
+    h('div', { class: 'unit-switch' }, unitBtn('speed', 'Velocidad (km/h)'), unitBtn('pace', 'Ritmo (min/km)'))));
+
   const tbody = h('tbody');
   w.steps.forEach((st, i) => tbody.append(stepRow(w, st, i)));
   box.append(h('div', { class: 'table-wrap' }, h('table', { class: 'steps' },
-    h('thead', {}, h('tr', {}, h('th', {}, '#'), h('th', {}, 'Nombre'), h('th', {}, 'Tipo'), h('th', {}, 'Duración / distancia'), h('th', {}, 'Velocidad'), h('th', {}, 'Ritmo'), h('th', {}))),
+    h('thead', {}, h('tr', {}, h('th', {}, '#'), h('th', {}, 'Nombre'), h('th', {}, 'Tipo'), h('th', {}, 'Duración / distancia'),
+      h('th', {}, usePace ? 'Ritmo' : 'Velocidad'), h('th', {}, usePace ? 'Velocidad' : 'Ritmo'), h('th', {}))),
     tbody)));
 
   box.append(h('div', { class: 'row gap' },
@@ -104,12 +114,39 @@ function renderEditor() {
 
   box.append(h('div', { class: 'muted', id: 'woSummary' }));
   box.append(h('canvas', { id: 'woPreview', class: 'preview' }));
-  box.append(h('p', { class: 'muted small' }, 'Duración: escribe mm:ss (p. ej. 1:30) o minutos (p. ej. 5). Distancia en metros. Velocidad 0 = la cinta se pausa durante ese paso (solo en pasos por tiempo).'));
+  box.append(h('p', { class: 'muted small' }, usePace
+    ? 'Duración: escribe mm:ss (p. ej. 1:30) o minutos (p. ej. 5). Distancia en metros. Ritmo en min/km (p. ej. 5:30). Deja el ritmo vacío o pon 0 para que la cinta se pause durante ese paso (solo en pasos por tiempo).'
+    : 'Duración: escribe mm:ss (p. ej. 1:30) o minutos (p. ej. 5). Distancia en metros. Velocidad 0 = la cinta se pausa durante ese paso (solo en pasos por tiempo).'));
   requestAnimationFrame(() => updateEditorSummary(w));
 }
 
 function stepRow(w, st, i) {
-  const paceCell = h('td', { class: 'muted' }, fmtPace(st.speed));
+  const usePace = App.settings.workoutUnit === 'pace';
+  const other = () => usePace ? (st.speed > 0 ? `${st.speed.toFixed(1)} km/h` : 'pausa') : fmtPace(st.speed);
+  const paceCell = h('td', { class: 'muted' }, other());
+  /** Guarda la velocidad nueva (km/h); false si no es válida para este paso. */
+  const setSpeed = (v, input) => {
+    if (st.type === 'dist' && v <= 0) { toast('Un paso por distancia necesita un ritmo o velocidad', 'warn'); input.value = usePace ? (st.speed > 0 ? fmtPace(st.speed) : '') : st.speed; return; }
+    st.speed = v; paceCell.textContent = other(); workoutChanged(w);
+  };
+  const speedCell = usePace
+    ? h('td', {}, h('input', {
+      class: 'in-speed', placeholder: 'm:ss', value: st.speed > 0 ? fmtPace(st.speed) : '',
+      onchange: e => {
+        const v = paceToKmh(e.target.value);
+        if (v === null) { toast('Escribe el ritmo como minutos:segundos por km, p. ej. 5:30', 'warn'); e.target.value = st.speed > 0 ? fmtPace(st.speed) : ''; return; }
+        setSpeed(Math.min(v, 25), e.target);
+        if (st.speed > 0) e.target.value = fmtPace(st.speed);
+      }
+    }), h('span', { class: 'muted' }, ' /km'))
+    : h('td', {}, h('input', {
+      type: 'number', step: '0.1', min: '0', max: '25', class: 'in-speed', value: st.speed,
+      onchange: e => {
+        let v = parseFloat(e.target.value);
+        if (isNaN(v) || v < 0) v = 0;
+        setSpeed(Math.round(Math.min(v, 25) * 10) / 10, e.target);
+      }
+    }), h('span', { class: 'muted' }, ' km/h'));
   const valInput = h('input', {
     class: 'in-val', value: st.type === 'time' ? fmtTime(st.value) : String(st.value),
     onchange: e => {
@@ -131,15 +168,7 @@ function stepRow(w, st, i) {
       }
     }, h('option', { value: 'time' }, 'Tiempo'), h('option', { value: 'dist' }, 'Distancia'))),
     h('td', {}, valInput, st.type === 'dist' ? h('span', { class: 'muted' }, ' m') : null),
-    h('td', {}, h('input', {
-      type: 'number', step: '0.1', min: '0', max: '25', class: 'in-speed', value: st.speed,
-      onchange: e => {
-        let v = parseFloat(e.target.value);
-        if (isNaN(v) || v < 0) v = 0;
-        if (st.type === 'dist' && v <= 0) { toast('Un paso por distancia necesita velocidad mayor que 0', 'warn'); e.target.value = st.speed; return; }
-        st.speed = Math.round(v * 10) / 10; paceCell.textContent = fmtPace(st.speed); workoutChanged(w);
-      }
-    }), h('span', { class: 'muted' }, ' km/h')),
+    speedCell,
     paceCell,
     h('td', { class: 'row-actions' },
       h('button', { class: 'mini', title: 'Subir', onclick: () => move(-1) }, '↑'),
@@ -151,15 +180,32 @@ function stepRow(w, st, i) {
 function openSeriesDialog(w) {
   const dlg = $('#dlgSeries');
   const f = dlg.querySelector('form');
+  const usePace = App.settings.workoutUnit === 'pace';
+  // Etiquetas y valores según la unidad elegida (el valor que hubiera se convierte).
+  $('#lblWorkSpeed').textContent = usePace ? 'Ritmo serie (min/km)' : 'Velocidad serie (km/h)';
+  $('#lblRestSpeed').textContent = usePace ? 'Ritmo recuperación (min/km)' : 'Velocidad recuperación (km/h)';
+  if (f.dataset.unit !== (usePace ? 'pace' : 'speed')) {
+    const conv = (val) => {
+      if (usePace) { const k = parseFloat(String(val).replace(',', '.')); return k > 0 ? fmtPace(k) : ''; }
+      const k = paceToKmh(val); return k ? k.toFixed(1) : '0';
+    };
+    // Se leen antes de cambiar el tipo del campo (un campo numérico no admite "5:30").
+    const work = conv(f.workSpeed.value), rest = conv(f.restSpeed.value);
+    f.workSpeed.type = f.restSpeed.type = usePace ? 'text' : 'number';
+    f.workSpeed.value = work;
+    f.restSpeed.value = rest;
+    f.dataset.unit = usePace ? 'pace' : 'speed';
+  }
+  const readSpeed = (val) => usePace ? paceToKmh(val) : parseFloat(String(val).replace(',', '.'));
   f.onsubmit = e => {
     e.preventDefault();
     const reps = clamp(parseInt(f.reps.value, 10) || 1, 1, 50);
-    const wt = parseTime(f.workTime.value), ws = parseFloat(String(f.workSpeed.value).replace(',', '.'));
-    const rt = parseTime(f.restTime.value), rs = parseFloat(String(f.restSpeed.value).replace(',', '.'));
-    if (!(wt > 0) || !(ws > 0)) { toast('Revisa la duración y velocidad de la serie', 'warn'); return; }
+    const wt = parseTime(f.workTime.value), ws = readSpeed(f.workSpeed.value);
+    const rt = parseTime(f.restTime.value), rs = readSpeed(f.restSpeed.value);
+    if (!(wt > 0) || !(ws > 0)) { toast(`Revisa la duración y ${usePace ? 'el ritmo' : 'la velocidad'} de la serie`, 'warn'); return; }
     for (let i = 1; i <= reps; i++) {
-      w.steps.push(mkStep(`Serie ${i}/${reps}`, 'time', wt, ws));
-      if (rt > 0 && (i < reps || f.lastRest.checked)) w.steps.push(mkStep('Recuperación', 'time', rt, isNaN(rs) ? 0 : rs));
+      w.steps.push(mkStep(`Serie ${i}/${reps}`, 'time', wt, Math.min(ws, 25)));
+      if (rt > 0 && (i < reps || f.lastRest.checked)) w.steps.push(mkStep('Recuperación', 'time', rt, rs > 0 ? Math.min(rs, 25) : 0));
     }
     dlg.close();
     workoutChanged(w, true);

@@ -148,22 +148,32 @@ async function update(release) {
   return true
 }
 
-function createShortcuts() {
-  if (process.env.CINTAPC_SIN_ACCESOS) return
+const appIcon = () => (existsSync(join(APP, 'resources', 'icono.ico')) ? join(APP, 'resources', 'icono.ico') : electronExe(APP))
+const ICON_MARK = join(BASE, 'icono-v1')
+
+/**
+ * Crea (onlyExisting = false) o actualiza (true) los accesos directos del escritorio y del menú Inicio.
+ * Actualizar solo toca los que existen: si se borró uno, no se vuelve a crear.
+ */
+function createShortcuts(onlyExisting = false) {
+  if (process.env.CINTAPC_SIN_ACCESOS) return true
   const ps = `
 $ws = New-Object -ComObject WScript.Shell
 $targets = @([Environment]::GetFolderPath('Desktop'), (Join-Path ([Environment]::GetFolderPath('Programs')) ''))
 foreach ($dir in $targets) {
-  $s = $ws.CreateShortcut((Join-Path $dir 'CintaPC.lnk'))
+  $lnk = Join-Path $dir 'CintaPC.lnk'
+  if (${onlyExisting ? '$true' : '$false'} -and -not (Test-Path $lnk)) { continue }
+  $s = $ws.CreateShortcut($lnk)
   $s.TargetPath = '${process.execPath.replace(/'/g, "''")}'
   $s.Arguments = '"${join(BASE, 'lanzar.mjs').replace(/'/g, "''")}"'
   $s.WorkingDirectory = '${BASE.replace(/'/g, "''")}'
-  $s.IconLocation = '${electronExe(APP).replace(/'/g, "''")},0'
+  $s.IconLocation = '${appIcon().replace(/'/g, "''")},0'
   $s.Description = 'CintaPC - cinta de correr'
   $s.Save()
 }`
   const r = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ps], { stdio: 'inherit' })
-  log(r.status === 0 ? 'Acceso directo "CintaPC" creado en el escritorio y en el menú Inicio.' : 'No se pudo crear el acceso directo.')
+  if (!onlyExisting) log(r.status === 0 ? 'Acceso directo "CintaPC" creado en el escritorio y en el menú Inicio.' : 'No se pudo crear el acceso directo.')
+  return r.status === 0
 }
 
 async function launch() {
@@ -199,7 +209,11 @@ async function main() {
   }
   if (!existsSync(join(APP, 'package.json'))) throw new Error('CintaPC no está instalada y no se ha podido descargar. Comprueba la conexión a internet y vuelve a intentarlo.')
   if (!existsSync(electronExe(APP))) installDependencies(APP) // instalación a medias: se completa
-  if (installMode) createShortcuts()
+  if (installMode) { createShortcuts(); try { writeFileSync(ICON_MARK, '') } catch { } }
+  else if (!existsSync(ICON_MARK) && existsSync(join(APP, 'resources', 'icono.ico'))) {
+    // Instalaciones anteriores al icono propio: se cambia el icono de los accesos directos una vez.
+    if (createShortcuts(true)) { try { writeFileSync(ICON_MARK, '') } catch { } }
+  }
   await launch()
 }
 

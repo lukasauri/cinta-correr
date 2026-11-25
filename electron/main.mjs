@@ -38,6 +38,7 @@ function createWindow() {
     show: false,
     backgroundColor: '#0b0f14',
     title: 'CintaPC',
+    icon: join(root, 'resources', 'icono.ico'),
     ...(offscreen ? { x: -32000, y: -32000, skipTaskbar: true } : {}),
     webPreferences: {
       preload: join(here, 'preload.cjs'),
@@ -113,6 +114,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', () => {
     if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.focus() }
   })
+  app.setAppUserModelId('CintaPC')
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null)
     setupIpc()

@@ -5,8 +5,9 @@ const ZONE_COLORS = ['#94a3b8', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444'];
 const ZONE_NAMES = ['Recuperación', 'Base aeróbica', 'Aeróbico', 'Umbral', 'Máximo'];
 
 const WIDGETS = {
-  speed: { name: 'Velocidad', unit: 'km/h', val: c => c.speed.toFixed(1), sub: c => c.session ? `objetivo ${c.target.toFixed(1)}` : '' },
+  speed: { name: 'Velocidad', unit: 'km/h', val: c => c.speed.toFixed(1), sub: c => c.session ? `objetivo ${App.settings.workoutUnit === 'pace' ? fmtPace(c.target) + ' /km' : c.target.toFixed(1)}` : '' },
   target: { name: 'Velocidad objetivo', unit: 'km/h', val: c => c.target.toFixed(1) },
+  targetPace: { name: 'Ritmo objetivo', unit: 'min/km', val: c => fmtPace(c.target) },
   pace: { name: 'Ritmo', unit: 'min/km', val: c => fmtPace(c.speed) },
   time: { name: 'Tiempo', val: c => fmtTime(c.elapsed) },
   distance: { name: 'Distancia', unit: 'km', val: c => (c.dist / 1000).toFixed(2) },
@@ -165,6 +166,8 @@ function updateGrid(force) {
   });
   const tEl = $('#targetSpeed');
   if (tEl) setText(tEl, (App.targetSpeed || 0).toFixed(1));
+  const tLbl = $('#targetLabel');
+  if (tLbl) setText(tLbl, App.settings.workoutUnit === 'pace' && App.targetSpeed > 0 ? `objetivo · ${fmtPace(App.targetSpeed)} /km` : 'objetivo km/h');
 }
 
 function updateCustom(type, item, c, force, now) {
@@ -172,7 +175,7 @@ function updateCustom(type, item, c, force, now) {
   if (type === 'step') {
     if (c.step) {
       setText(el.querySelector('.st-title'), `${c.step.name || 'Paso'}  ·  ${c.stepIdx + 1}/${c.nSteps}`);
-      setText(el.querySelector('.st-target'), `${c.step.speed.toFixed(1)} km/h · ${fmtPace(c.step.speed)} /km`);
+      setText(el.querySelector('.st-target'), fmtTarget(c.step.speed));
       el.querySelector('.bar-fill').style.width = (c.stepFrac * 100).toFixed(1) + '%';
     } else {
       setText(el.querySelector('.st-title'), c.session ? 'Carrera libre' : (c.previewSteps ? selectedWorkout().name : 'Carrera libre'));
@@ -183,7 +186,7 @@ function updateCustom(type, item, c, force, now) {
     const n = c.nextStep;
     if (n) {
       setText(el.querySelector('.st-title'), n.name || 'Siguiente');
-      setText(el.querySelector('.st-target'), `${n.speed.toFixed(1)} km/h · ${n.type === 'time' ? fmtTime(n.value) : fmtDist(n.value)}`);
+      setText(el.querySelector('.st-target'), `${fmtTarget(n.speed)} · ${n.type === 'time' ? fmtTime(n.value) : fmtDist(n.value)}`);
     } else {
       setText(el.querySelector('.st-title'), c.step ? 'Último paso' : '—');
       setText(el.querySelector('.st-target'), c.step ? 'Al terminar se detiene la cinta' : '');

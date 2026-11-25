@@ -47,6 +47,15 @@ function fmtPace(kmh) {
   return `${Math.floor(t / 60)}:${pad(t % 60)}`;
 }
 
+/** Ritmo ("5:30" o "5.5" minutos por km) -> km/h con 2 decimales; null si no es válido. 0 o vacío = pausa. */
+function paceToKmh(str) {
+  const s = String(str).trim();
+  if (s === '' || s === '0' || s === '-' || s === '--:--') return 0;
+  const sec = parseTime(s);
+  if (!(sec >= 120 && sec <= 3600)) return null; // entre 2:00 y 60:00 min/km (30 y 1 km/h)
+  return Math.round(360000 / sec) / 100;
+}
+
 /** "mm:ss", "h:mm:ss" o un número (minutos) -> segundos */
 function parseTime(str) {
   str = String(str).trim().replace(',', '.');
@@ -116,6 +125,17 @@ const Sound = {
 };
 
 function speakSpeed(k) { return `${String(Math.round(k * 10) / 10).replace('.', ',')} kilómetros por hora`; }
+function speakPace(kmh) {
+  const t = Math.round(3600 / kmh), m = Math.floor(t / 60), s = t % 60;
+  return `ritmo de ${m} ${m === 1 ? 'minuto' : 'minutos'}${s ? ` ${s}` : ''} por kilómetro`;
+}
+/** Velocidad de un paso dicha como el usuario la escribe (km/h o ritmo). */
+function speakTarget(kmh) { return App.settings.workoutUnit === 'pace' ? speakPace(kmh) : speakSpeed(kmh); }
+/** Objetivo de un paso escrito en la unidad elegida, con la otra entre paréntesis. */
+function fmtTarget(kmh) {
+  if (!(kmh > 0)) return 'Pausa';
+  return App.settings.workoutUnit === 'pace' ? `${fmtPace(kmh)} /km (${kmh.toFixed(1)} km/h)` : `${kmh.toFixed(1)} km/h (${fmtPace(kmh)} /km)`;
+}
 function speakDuration(sec) {
   sec = Math.round(sec);
   const m = Math.floor(sec / 60), s = sec % 60, parts = [];

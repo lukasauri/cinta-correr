@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CintaPC</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏃</text></svg>">
+  <link rel="icon" href="resources/icono.svg">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">🏃 CintaPC</div>
+    <div class="brand"><img src="resources/icono-pequeno.svg" alt="" width="26" height="26"> CintaPC</div>
     <nav class="tabs">
       <button data-view="train" class="active">Entrenar</button>
       <button data-view="workouts">Entrenamientos</button>
@@ -40,7 +40,7 @@
         </div>
         <div class="ctl-group">
           <button class="btn big" id="btnSlower" title="Más despacio (flecha abajo)">−</button>
-          <div class="target"><small>objetivo km/h</small><b id="targetSpeed">0.0</b></div>
+          <div class="target"><small id="targetLabel">objetivo km/h</small><b id="targetSpeed">0.0</b></div>
           <button class="btn big" id="btnFaster" title="Más rápido (flecha arriba)">+</button>
           <div id="presets" class="presets"></div>
         </div>
@@ -94,24 +94,27 @@
   <dialog id="dlgConnect">
     <h3>Conectar cinta</h3>
     <p class="muted">Enciende la cinta y asegúrate de que <b>Kinomap no está conectado</b> en el móvil (la cinta solo acepta una conexión a la vez).</p>
-    <label class="field check"><input type="checkbox" id="chkShowAll"> <span>Mostrar todos los dispositivos Bluetooth (si la cinta no aparece)</span></label>
-    <div class="row gap wrap">
-      <button id="btnConnBle" class="btn primary">Buscar cinta Bluetooth</button>
+    <div class="connect-actions">
+      <button id="btnConnBle" class="btn primary big">Buscar cinta Bluetooth</button>
       <button id="btnConnSim" class="btn">Usar simulador</button>
-      <button class="btn" data-close>Cancelar</button>
     </div>
+    <div class="connect-options">
+      <label class="field check"><input type="checkbox" id="chkShowAll"> <span>Mostrar todos los dispositivos Bluetooth</span>
+        <small class="muted">Márcalo solo si tu cinta no aparece en la lista.</small></label>
+    </div>
+    <div class="row end"><button class="btn" data-close>Cancelar</button></div>
   </dialog>
 
   <dialog id="dlgSeries">
-    <form>
+    <form data-unit="speed">
       <h3>Añadir series</h3>
       <div class="form-grid">
         <label>Repeticiones <input name="reps" type="number" min="1" max="50" value="6"></label>
         <span></span>
         <label>Duración serie <input name="workTime" value="1:00"></label>
-        <label>Velocidad serie (km/h) <input name="workSpeed" type="number" step="0.1" value="11"></label>
+        <label><span id="lblWorkSpeed">Velocidad serie (km/h)</span> <input name="workSpeed" type="number" step="0.1" value="11"></label>
         <label>Duración recuperación <input name="restTime" value="1:30"></label>
-        <label>Velocidad recuperación (km/h) <input name="restSpeed" type="number" step="0.1" value="6"></label>
+        <label><span id="lblRestSpeed">Velocidad recuperación (km/h)</span> <input name="restSpeed" type="number" step="0.1" value="6"></label>
       </div>
       <label class="field check"><input type="checkbox" name="lastRest"> <span>Añadir recuperación también tras la última serie</span></label>
       <div class="row gap">

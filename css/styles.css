@@ -23,7 +23,7 @@ h2, h3 { margin: 0 0 8px; }
 
 /* Barra superior */
 .topbar { display: flex; align-items: center; gap: 16px; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.brand { font-weight: 700; font-size: 18px; }
+.brand { font-weight: 700; font-size: 18px; display: flex; align-items: center; gap: 8px; }
 .tabs { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
 .tabs button { background: none; border: 0; padding: 8px 14px; border-radius: 10px; cursor: pointer; color: var(--muted); font-weight: 600; }
 .tabs button:hover { background: var(--panel2); color: var(--text); }
@@ -193,3 +193,16 @@ dialog .body { display: flex; flex-direction: column; gap: 12px; margin-bottom: 
 .steps-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .steps-list a { color: var(--accent); }
 code { background: var(--panel); padding: 1px 6px; border-radius: 4px; }
+
+/* Diálogo de conexión: acción principal arriba, opciones separadas abajo */
+.connect-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 18px 0 4px; }
+.connect-options { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.connect-options .field.check { padding: 6px 0; }
+.connect-options input[type=checkbox] { width: 18px; height: 18px; }
+.row.end { justify-content: flex-end; margin-top: 16px; }
+
+/* Selector de unidades del editor */
+.unit-switch { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.unit-btn { border: 0; background: var(--panel2); padding: 7px 14px; cursor: pointer; font-weight: 600; color: var(--muted); }
+.unit-btn + .unit-btn { border-left: 1px solid var(--border); }
+.unit-btn.active { background: var(--accent); color: #fff; }
